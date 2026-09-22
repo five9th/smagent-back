@@ -1,8 +1,11 @@
 # Profile for Spring-based tests: in-memory DB, throwaway key file —
 # keeps tests from touching ./data (the real H2 database and encryption key).
+# The random DB name isolates each Spring context (different @MockitoBean sets
+# produce different cached contexts; a shared named DB would let their
+# create-drop cycles interfere).
 spring:
   datasource:
-    url: jdbc:h2:mem:smagent-test;DB_CLOSE_DELAY=-1
+    url: jdbc:h2:mem:smagent-${random.uuid};DB_CLOSE_DELAY=-1
   jpa:
     hibernate:
       ddl-auto: create-drop

@@ -1,3 +1,37 @@
 spring:
   application:
     name: smagent
+  datasource:
+    url: jdbc:h2:file:./data/smagent;AUTO_SERVER=TRUE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  jpa:
+    hibernate:
+      ddl-auto: update # Hibernate creates/alters tables to match @Entity classes at startup. Will need to switch to validate + migration scripts (Flyway).
+    open-in-view: false
+  h2:
+    console:
+      enabled: true
+
+server:
+  servlet:
+    session:
+      cookie:
+        http-only: true # JS don't see cookies
+        same-site: lax
+
+smagent:
+  cors:
+    allowed-origins: http://localhost:5173
+  admin:
+    username: ${SMAGENT_ADMIN_USERNAME:admin}
+    password: ${SMAGENT_ADMIN_PASSWORD:}
+  security:
+    encryption-key: ${SMAGENT_ENCRYPTION_KEY:}
+    key-file: ./data/smagent.key
+  facebook:
+    graph-api-version: v23.0
+  reddit:
+    base-url: https://oauth.reddit.com
+    token-url: https://www.reddit.com/api/v1/access_token

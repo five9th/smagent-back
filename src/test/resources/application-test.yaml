@@ -1,0 +1,18 @@
+# Profile for Spring-based tests: in-memory DB, throwaway key file —
+# keeps tests from touching ./data (the real H2 database and encryption key).
+spring:
+  datasource:
+    url: jdbc:h2:mem:smagent-test;DB_CLOSE_DELAY=-1
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  h2:
+    console:
+      enabled: false
+
+smagent:
+  admin:
+    username: test-owner
+    password: test-password
+  security:
+    key-file: ./build/test-data/smagent.key

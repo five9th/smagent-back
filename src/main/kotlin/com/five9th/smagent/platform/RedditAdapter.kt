@@ -13,6 +13,12 @@ import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
 /**
+ * !!! Reddit API was closed !!!
+ * The usage of the Reddit's API implemented here is no longer
+ * available. There might be some workarounds using Devvit app
+ * that can be investigated and added later.
+ * -----------------------------
+ *
  * Reddit posting as a "script" app using the OAuth2 password grant
  * (works for the developer's own account; tokens last ~1h and are cached).
  *

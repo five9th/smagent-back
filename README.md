@@ -33,12 +33,12 @@ it up together; losing the key makes stored credentials unrecoverable.
 
 ### Configuration
 
-| Env var | Purpose | Default |
-|---|---|---|
-| `SMAGENT_ADMIN_PASSWORD` | Owner password, seeded on first start; fail-fast if unset | none |
-| `SMAGENT_ADMIN_USERNAME` | Owner username | `admin` |
-| `SMAGENT_ENCRYPTION_KEY` | base64 of 32 bytes; overrides the generated key file | generated into `./data/smagent.key` |
-| `SMAGENT_CORS_ORIGINS` (`smagent.cors.allowed-origins`) | Allowed SPA origins | `http://localhost:5173` |
+| Env var                                                 | Purpose                                                   | Default                             |
+|---------------------------------------------------------|-----------------------------------------------------------|-------------------------------------|
+| `SMAGENT_ADMIN_PASSWORD`                                | Owner password, seeded on first start; fail-fast if unset | none                                |
+| `SMAGENT_ADMIN_USERNAME`                                | Owner username                                            | `admin`                             |
+| `SMAGENT_ENCRYPTION_KEY`                                | base64 of 32 bytes; overrides the generated key file      | generated into `./data/smagent.key` |
+| `SMAGENT_CORS_ORIGINS` (`smagent.cors.allowed-origins`) | Allowed SPA origins                                       | `http://localhost:5173`             |
 
 ### Deploying on a VPS
 

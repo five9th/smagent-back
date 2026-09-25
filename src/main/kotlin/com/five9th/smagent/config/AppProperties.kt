@@ -11,7 +11,7 @@ class AppProperties(
     /** SPA origins allowed to call the API (session cookie needs credentials). */
     class Cors(var allowedOrigins: List<String> = listOf("http://localhost:5173"))
 
-    class Facebook(var graphApiVersion: String = "v23.0")
+    class Facebook(var graphApiVersion: String = "v26.0")
 
     class Reddit(
         var baseUrl: String = "https://oauth.reddit.com",

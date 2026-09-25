@@ -58,11 +58,14 @@ the port unexposed except through the proxy.
 4. Store as `{ "pageId": "...", "pageAccessToken": "..." }`.
 
 **Reddit**
-1. Create a **script**-type app at reddit.com/prefs/apps
-   (redirect URI can be `http://localhost:8080`).
-2. Store as `{ "clientId", "clientSecret", "username", "password", "subreddit" }`.
+
+⚠Reddit API was closed⚠ \
+Maybe I will figure something out later.
+1. ~~Create a **script**-type app at reddit.com/prefs/apps
+   (redirect URI can be `http://localhost:8080`).~~
+2. ~~Store as `{ "clientId", "clientSecret", "username", "password", "subreddit" }`.
    Password grant works for your own account; tokens are fetched hourly and cached.
-   2FA on the account breaks password grant.
+   2FA on the account breaks password grant.~~
 
 Always run the account **verify** endpoint after pasting credentials — it does a
 cheap "who am I" call and tells you immediately if something is wrong.
@@ -81,7 +84,7 @@ GET    /api/social-accounts                                 credentials masked
 POST   /api/social-accounts        {platform, credentials, displayName?}
 GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}   {displayName?, credentials?}
-DELETE /api/social-accounts/{id}
+DELETE /api/social-accounts/{id}                            ⚠ currently does not delete the actual post from social platforms (if it was published)
 POST   /api/social-accounts/{id}/verify                     cheap "who am I" call
 
 GET    /api/posts?status=DRAFT|PUBLISHED

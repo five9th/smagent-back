@@ -29,6 +29,9 @@ PASSWORD = os.environ.get("SMAGENT_TEST_PASSWORD", "")
 FB_PAGE_ID = os.environ.get("SMAGENT_FB_PAGE_ID", "")
 FB_TOKEN = os.environ.get("SMAGENT_FB_PAGE_ACCESS_TOKEN", "")
 
+POST_TITLE = "SMAgent FB smoke test"
+POST_TEXT = "Hello from SMAgent published✅ smoke test"
+
 checks = []
 
 
@@ -95,8 +98,8 @@ def main():
     pause("account verified")
 
     s, post = c.request("POST", "/api/posts", {
-        "title": "SMAgent FB smoke test",
-        "text": "Hello from SMAgent smoke test 🚀",
+        "title": POST_TITLE,
+        "text": POST_TEXT
     })
     check("create post -> 201 DRAFT", s == 201 and post.get("status") == "DRAFT", f"got {s} {post}")
     post_id = post.get("id")

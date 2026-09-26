@@ -288,6 +288,25 @@ def ts5_publish(c: Client):
     s, d = c.request("GET", f"/api/posts")
     print(s, d, '\n')
 
+def ts6_get_everything(c: Client):
+    print("===== test_suit_4 =====\n")
+
+    print('c.request("POST", "/api/auth/login", {"username": USERNAME, "password": PASSWORD})')
+    s, d = c.request("POST", "/api/auth/login", {"username": USERNAME, "password": PASSWORD})
+    print(s, d)
+
+    print('GET, "/api/social-accounts"')
+    s, d = c.request("GET", "/api/social-accounts")
+    print(s,d)
+
+    print('GET, "/api/posts"')
+    s, d = c.request("GET", "/api/posts")
+    print(s,d)
+
+    print('GET, "/api/publications"')
+    s, d = c.request("GET", "/api/publications")
+    print(s,d)
+
 
 def main():
     if not PASSWORD:
@@ -298,7 +317,8 @@ def main():
 
     # test_suit_3(c)
     # ts4(c)
-    ts5_publish(c)
+    # ts5_publish(c)
+    ts6_get_everything(c)
 
 if __name__ == "__main__":
     main()

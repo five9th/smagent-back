@@ -21,16 +21,22 @@ data class UpdatePostRequest(
     val overrides: Map<Platform, String>? = null,
 )
 
+// TODO: update everything that uses it (and docs)
 data class PostDto(
     val id: Long?,
-    val title: String?,
-    val text: String,
+    val content: PostContentDto,
     val status: PostStatus,
-    val overrides: Map<Platform, String>,
+    val overrides: Map<Platform, PostContentDto>,
     val createdAt: Instant,
     val updatedAt: Instant,
     val publications: List<PublicationDto> = emptyList(),
-)
+) {
+    data class PostContentDto(
+        val title: String?,
+        val text: String,
+        // other content (e.g. images) may be added here later
+    )
+}
 
 data class PublicationDto(
     val id: Long?,

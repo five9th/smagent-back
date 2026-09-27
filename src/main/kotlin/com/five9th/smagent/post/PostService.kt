@@ -34,8 +34,10 @@ class PostService(
     fun create(request: CreatePostRequest): PostDto {
         validateOverrides(request.overrides)
         val post = Post(
-            title = normalizedTitle(request.content.title),
-            text = request.content.text.trim(),
+            content = PostContent(
+                title = normalizedTitle(request.content.title),
+                text = request.content.text.trim(),
+            ),
             overrides = request.overrides.toContentMap(),
         )
         return toDto(posts.save(post), includePublications = false)
@@ -47,8 +49,7 @@ class PostService(
             throw IllegalArgumentException("Only DRAFT posts can be edited (post $id is ${post.status})")
         }
         request.content?.let {
-            post.title = normalizedTitle(it.title)
-            post.text = it.text.trim()
+            post.content = PostContent(title = normalizedTitle(it.title), text = it.text.trim())
         }
         request.overrides?.let {
             validateOverrides(it)
@@ -78,7 +79,7 @@ class PostService(
 
     private fun toDto(post: Post, includePublications: Boolean): PostDto = PostDto(
         id = post.id,
-        content = PostContentDto(title = post.title, text = post.text),
+        content = PostContentDto(title = post.content.title, text = post.content.text),
         status = post.status,
         overrides = post.overrides.mapValues { PostContentDto(title = it.value.title, text = it.value.text) },
         createdAt = post.createdAt,

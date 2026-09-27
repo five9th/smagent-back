@@ -3,6 +3,7 @@ package com.five9th.smagent.domain
 import jakarta.persistence.CollectionTable
 import jakarta.persistence.Column
 import jakarta.persistence.ElementCollection
+import jakarta.persistence.Embedded
 import jakarta.persistence.Entity
 import jakarta.persistence.EnumType
 import jakarta.persistence.Enumerated
@@ -18,12 +19,9 @@ import java.time.Instant
 @Entity
 @Table(name = "posts")
 class Post(
-    /** Self-post title; required when publishing to Reddit, unused elsewhere. */
-    @Column(length = 300)
-    var title: String? = null,
-
-    @Column(nullable = false, length = 5000)
-    var text: String = "",
+    /** Self-post content; title is required when publishing to Reddit. */
+    @Embedded
+    var content: PostContent = PostContent(),
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)

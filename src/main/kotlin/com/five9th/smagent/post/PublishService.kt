@@ -61,8 +61,8 @@ class PublishService(
         // to the post's own content (so e.g. a text-only override keeps the title).
         val override = post.overrides[account.platform]
         val command = PublishCommand(
-            title = override?.title ?: post.title,
-            text = override?.text ?: post.text,
+            title = override?.title ?: post.content.title,
+            text = override?.text ?: post.content.text,
         )
 
         return try {

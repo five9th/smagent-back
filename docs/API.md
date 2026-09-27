@@ -162,33 +162,39 @@ error (e.g. `"Facebook API error (400): Malformed access token"`). Always `200`.
 
 ```json
 {
-  "title": "Optional — Reddit needs it",
-  "text": "generic body",
-  "overrides": { "FACEBOOK": "facebook-specific variant" }
+  "content": { "title": "Optional — Reddit needs it", "text": "generic body" },
+  "overrides": { "FACEBOOK": { "title": null, "text": "facebook-specific variant" } }
 }
 ```
 
-→ `201` PostDto. `text` required (`400` if blank). `overrides` maps a platform to
-**full replacement text** (character limits, per-platform tweaks); absence = use `text`.
-Reddit validation of a missing title happens at publish time (per-target error), since
-targets are chosen then.
+→ `201` PostDto. `content.text` required (`400` if blank). `overrides` maps a
+platform to **full replacement content** (character limits, per-platform titles);
+at publish time each field falls back individually —
+`override.title ?: content.title`, `override.text ?: content.text`.
+Reddit validation of a missing title happens at publish time (per-target error),
+since targets are chosen then.
 
 ### PostDto
 
 ```json
 {
-  "id": 1, "title": null, "text": "generic body", "status": "DRAFT",
-  "overrides": { "FACEBOOK": "facebook variant" },
+  "id": 1,
+  "content": { "title": null, "text": "generic body" },
+  "status": "DRAFT",
+  "overrides": { "FACEBOOK": { "title": null, "text": "facebook variant" } },
   "createdAt": "...", "updatedAt": "...",
   "publications": [ ...PublicationDto ]
 }
 ```
 
-`publications` populated on single-post GET and PUT; empty on list responses.
+`content` is the post's own title+text unit (`PostContent`); media fields may be
+added there later. `publications` populated on single-post GET and PUT; empty on
+list responses.
 
 ### PUT /api/posts/{id}
 
-Any of `title`, `text`, `overrides` (overrides replaced wholesale). Non-DRAFT post →
+`content` (replaces title+text together; a null title clears it) and/or
+`overrides` (replaced wholesale; each entry must include text). Non-DRAFT post →
 `400 "Only DRAFT posts can be edited"`.
 
 ### DELETE /api/posts/{id} 🚧

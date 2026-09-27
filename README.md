@@ -91,7 +91,7 @@ DELETE /api/social-accounts/{id}
 POST   /api/social-accounts/{id}/verify                     cheap "who am I" call
 
 GET    /api/posts?status=DRAFT|PUBLISHED
-POST   /api/posts                  {title?, text, overrides?}   title required for Reddit
+POST   /api/posts                  {content: {title?, text}, overrides?}   title required for Reddit
 GET    /api/posts/{id}                                          incl. publications
 PUT    /api/posts/{id}             DRAFT posts only
 DELETE /api/posts/{id}                                          ⚠ currently does not delete the actual post from social platforms (if it was published)
@@ -100,9 +100,10 @@ POST   /api/posts/{id}/publish     {accountIds: []}             per-target resul
 GET    /api/publications?postId=                                flat attempt log
 ```
 
-`overrides` maps a platform to replacement text, e.g.
-`{"FACEBOOK": "shorter text"}` — Reddit needs `title`, platforms with character
-limits get their own variant. Publishing is idempotent-ish per attempt: every
+`content` is the post's text (and optional title) as one unit. `overrides` maps a
+platform to replacement content, e.g. `{"FACEBOOK": {"text": "shorter text"}}` —
+missing fields fall back to the post's own content at publish time; Reddit needs a
+`title`. Publishing is idempotent-ish per attempt: every
 attempt (even failed) is recorded as a `Publication` row; a post becomes
 `PUBLISHED` when at least one target succeeds and can be republished (retry).
 

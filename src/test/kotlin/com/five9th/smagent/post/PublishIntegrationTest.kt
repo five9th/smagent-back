@@ -55,11 +55,14 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
     }
 
     private fun createPost(title: String?, text: String, overrides: String? = null): Long {
+        val contentJson = if (title != null) {
+            """{"title":"$title","text":"$text"}"""
+        } else {
+            """{"text":"$text"}"""
+        }
         val body = buildString {
-            append("{")
-            if (title != null) append("\"title\":\"$title\",")
-            append("\"text\":\"$text\"")
-            if (overrides != null) append(",\"overrides\":$overrides")
+            append("""{"content":$contentJson""")
+            if (overrides != null) append(""","overrides":$overrides""")
             append("}")
         }
         val result = mvc.post("/api/posts") {
@@ -80,7 +83,7 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
         val postId = createPost(
             title = "Hello",
             text = "generic body",
-            overrides = """{"FACEBOOK":"facebook specific body"}"""
+            overrides = """{"FACEBOOK":{"title":"FB title","text":"facebook specific body"}}"""
         )
 
         whenever(facebookAdapter.publish(any(), any()))
@@ -101,11 +104,11 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.results[1].errorMessage") { exists() }
         }
 
-        // the platform override text (not the base text) must reach the adapter
+        // the platform override content (both fields, not the base content) must reach the adapter
         val commandCaptor = argumentCaptor<PublishCommand>()
         verify(facebookAdapter).publish(any(), commandCaptor.capture())
+        assertEquals("FB title", commandCaptor.firstValue.title)
         assertEquals("facebook specific body", commandCaptor.firstValue.text)
-        assertEquals("Hello", commandCaptor.firstValue.title)
 
         // publication log keeps both attempts, post detail exposes them
         mvc.get("/api/publications") { param("postId", postId.toString()) }.andExpect {
@@ -154,7 +157,7 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
 
         mvc.put("/api/posts/{id}", postId) {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"text":"edited"}"""
+            content = """{"content":{"text":"edited"}}"""
         }.andExpect { status { isBadRequest() } }
 
         // republish adds another publication row
@@ -200,10 +203,39 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
+    fun `editing a draft replaces content and overrides`() {
+        val postId = createPost("t", "body")
+
+        mvc.put("/api/posts/{id}", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {"content":{"title":null,"text":"new body"},
+                 "overrides":{"REDDIT":{"title":"rd title","text":"rd body"}}}
+            """.trimIndent()
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.content.title") { value(org.hamcrest.Matchers.nullValue()) }
+            jsonPath("$.content.text") { value("new body") }
+            jsonPath("$.overrides.REDDIT.title") { value("rd title") }
+            jsonPath("$.overrides.REDDIT.text") { value("rd body") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
     fun `post requires text`() {
         mvc.post("/api/posts") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"title":"only title"}"""
+            content = """{"content":{"title":"only title"}}"""
+        }.andExpect { status { isBadRequest() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `override content requires text`() {
+        mvc.post("/api/posts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"content":{"text":"body"},"overrides":{"FACEBOOK":{"text":"  "}}}"""
         }.andExpect { status { isBadRequest() } }
     }
 

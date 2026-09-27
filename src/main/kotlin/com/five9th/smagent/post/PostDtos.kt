@@ -3,25 +3,25 @@ package com.five9th.smagent.post
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.domain.PostStatus
 import com.five9th.smagent.domain.PublicationStatus
+import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
 import java.time.Instant
 
 data class CreatePostRequest(
-    /** Optional; Reddit requires it at publish time. */
-    val title: String? = null,
-    @field:NotBlank val text: String,
-    /** Per-platform replacement text, e.g. for character limits. */
-    val overrides: Map<Platform, String>? = null,
+    /** Post content; Reddit additionally requires a title at publish time. */
+    @field:Valid val content: PostDto.PostContentDto,
+    /** Per-platform replacement content (character limits, per-platform titles). */
+    val overrides: Map<Platform, PostDto.PostContentDto>? = null,
 )
 
 data class UpdatePostRequest(
-    val title: String? = null,
-    val text: String? = null,
-    val overrides: Map<Platform, String>? = null,
+    /** When present, replaces title and text wholesale (null title clears it). */
+    @field:Valid val content: PostDto.PostContentDto? = null,
+    /** Replaced wholesale when present. */
+    val overrides: Map<Platform, PostDto.PostContentDto>? = null,
 )
 
-// TODO: update everything that uses it (and docs)
 data class PostDto(
     val id: Long?,
     val content: PostContentDto,
@@ -33,8 +33,7 @@ data class PostDto(
 ) {
     data class PostContentDto(
         val title: String?,
-        val text: String,
-        // other content (e.g. images) may be added here later
+        @field:NotBlank val text: String,
     )
 }
 

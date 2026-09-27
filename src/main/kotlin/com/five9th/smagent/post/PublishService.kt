@@ -57,9 +57,12 @@ class PublishService(
             return fail(publication, account, "No adapter for platform ${account.platform}")
         }
 
+        // The per-platform override wins field-by-field; missing fields fall back
+        // to the post's own content (so e.g. a text-only override keeps the title).
+        val override = post.overrides[account.platform]
         val command = PublishCommand(
-            title = post.title,
-            text = post.overrides[account.platform] ?: post.text,
+            title = override?.title ?: post.title,
+            text = override?.text ?: post.text,
         )
 
         return try {

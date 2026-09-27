@@ -29,12 +29,11 @@ class Post(
     @Column(nullable = false)
     var status: PostStatus = PostStatus.DRAFT,
 
-    /** Per-platform replacement text (e.g. platform character limits, tweaks). */
+    /** Per-platform replacement content (character limits, per-platform titles). */
     @ElementCollection(fetch = FetchType.EAGER)
     @CollectionTable(name = "post_overrides", joinColumns = [JoinColumn(name = "post_id")])
     @MapKeyEnumerated(EnumType.STRING)
-    @Column(name = "text_override", length = 5000)
-    var overrides: MutableMap<Platform, String> = mutableMapOf(),
+    var overrides: MutableMap<Platform, PostContent> = mutableMapOf(),
 
     @Column(nullable = false)
     var createdAt: Instant = Instant.now(),

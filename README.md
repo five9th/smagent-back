@@ -72,7 +72,10 @@ cheap "who am I" call and tells you immediately if something is wrong.
 
 ## API
 
-All under `/api`, session-authenticated except login. Errors are
+Full reference with request/response examples and implementation status:
+**[docs/API.md](docs/API.md)** (also covers the planned engagement and AI endpoints).
+
+Short version — all under `/api`, session-authenticated except login. Errors are
 `{ "timestamp", "status", "message" }`.
 
 ```
@@ -84,14 +87,14 @@ GET    /api/social-accounts                                 credentials masked
 POST   /api/social-accounts        {platform, credentials, displayName?}
 GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}   {displayName?, credentials?}
-DELETE /api/social-accounts/{id}                            ⚠ currently does not delete the actual post from social platforms (if it was published)
+DELETE /api/social-accounts/{id}                            
 POST   /api/social-accounts/{id}/verify                     cheap "who am I" call
 
 GET    /api/posts?status=DRAFT|PUBLISHED
 POST   /api/posts                  {title?, text, overrides?}   title required for Reddit
 GET    /api/posts/{id}                                          incl. publications
 PUT    /api/posts/{id}             DRAFT posts only
-DELETE /api/posts/{id}                                          removes its publications
+DELETE /api/posts/{id}                                          ⚠ currently does not delete the actual post from social platforms (if it was published)
 POST   /api/posts/{id}/publish     {accountIds: []}             per-target results
 
 GET    /api/publications?postId=                                flat attempt log

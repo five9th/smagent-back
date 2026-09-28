@@ -16,6 +16,7 @@ import jakarta.persistence.MapKeyEnumerated
 import jakarta.persistence.Table
 import java.time.Instant
 
+// TODO: add createdBy: AppUser
 @Entity
 @Table(name = "posts")
 class Post(

@@ -15,6 +15,7 @@ data class PostContent(
     // left nullable: ddl-auto=update cannot add a NOT NULL column to a table
     // that already has rows (post_overrides); blank-ness is enforced in the
     // service layer instead
+    // TODO: make it not nullable
     @Column(length = 5000)
     var text: String = "",
 )

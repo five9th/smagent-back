@@ -126,6 +126,23 @@ def test_suit_1(api: SmagentApi):
         print("Failed:", ", ".join(failed))
         sys.exit(1)
 
+def ts2_list_posts(api: SmagentApi):
+    s, d = api.login()
+    check("login -> 200 owner", s == 200 and d.get("role") == "OWNER", f"got {s} {d}")
+
+    s, d = api.list_posts()
+    print("Posts:", d)
+
+def ts3_create_sa(api: SmagentApi):
+    s, d = api.login()
+    check("login -> 200 owner", s == 200 and d.get("role") == "OWNER", f"got {s} {d}")
+
+    s, fb = api.create_account("FACEBOOK", FACEBOOK_CREDS)
+    print(s, fb)
+
+    s, d = api.list_accounts()
+    print(s, d)
+
 
 def main():
     if not PASSWORD:
@@ -135,7 +152,9 @@ def main():
     # c = Client(BASE)
     api = SmagentApi(BASE)
 
-    test_suit_1(api)
+    # test_suit_1(api)
+    # ts2_list_posts(api)
+    ts3_create_sa(api)
 
 if __name__ == "__main__":
     main()

@@ -45,4 +45,7 @@ out/
 ### AI ###
 /.mcp.json
 /.claude/
+
+### Other ###
 /TODO.txt
+mynotes/

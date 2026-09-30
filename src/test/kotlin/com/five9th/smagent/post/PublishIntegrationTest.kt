@@ -172,7 +172,7 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `deleting a post removes its publications`() {
+    fun `deleting a published post requires the flag and keeps publications`() {
         val fbAccount = createAccount("FACEBOOK", "\"pageId\":\"1\",\"pageAccessToken\":\"tok\"")
         val postId = createPost(null, "hello")
 
@@ -184,10 +184,17 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             content = """{"accountIds":[$fbAccount]}"""
         }.andExpect { status { isOk() } }
 
-        mvc.delete("/api/posts/{id}", postId).andExpect { status { isNoContent() } }
+        // PUBLISHED without the explicit flag -> 400
+        mvc.delete("/api/posts/{id}", postId).andExpect { status { isBadRequest() } }
+
+        // not implemented yet -> 501
+        mvc.delete("/api/posts/{id}?deletePublications=true", postId).andExpect { status { isNotImplemented() } }
+
+        // explicit local-only delete -> 204, history survives
+        mvc.delete("/api/posts/{id}?deletePublications=false", postId).andExpect { status { isNoContent() } }
         mvc.get("/api/posts/{id}", postId).andExpect { status { isNotFound() } }
         mvc.get("/api/publications") { param("postId", postId.toString()) }.andExpect {
-            jsonPath("$.length()") { value(0) }
+            jsonPath("$.length()") { value(1) }
         }
     }
 

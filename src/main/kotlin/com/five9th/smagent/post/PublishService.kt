@@ -34,7 +34,7 @@ class PublishService(
     fun publish(postId: Long, accountIds: List<Long>): PublishResponse {
         val post = postService.get(postId)
         val results = accountIds.map { accountId -> publishToAccount(post, accountId) }
-        postService.markPublishedIfAnySuccess(post)
+        postService.refreshPostStatus(post, results.map { it.status })
         return PublishResponse(
             postId = post.id,
             postStatus = postService.get(postId).status,

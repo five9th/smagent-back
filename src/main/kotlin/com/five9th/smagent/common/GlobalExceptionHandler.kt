@@ -45,6 +45,10 @@ class GlobalExceptionHandler {
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     fun platform(e: PlatformException): ApiError = ApiError(Instant.now(), 502, e.message)
 
+    @ExceptionHandler(NotImplementedException::class)
+    @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)
+    fun notImplemented(e: NotImplementedException): ApiError = ApiError(Instant.now(), 501, e.message)
+
     @ExceptionHandler(Exception::class)
     @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
     fun unexpected(e: Exception): ApiError {

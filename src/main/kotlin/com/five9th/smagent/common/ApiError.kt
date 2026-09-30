@@ -9,3 +9,6 @@ data class ApiError(
 )
 
 class NotFoundException(message: String) : RuntimeException(message)
+
+/** Recognized but not implemented yet (e.g. deletePublications=true) -> 501. */
+class NotImplementedException(message: String) : RuntimeException(message)

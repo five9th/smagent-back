@@ -24,8 +24,9 @@ object CredentialParser {
         return result
     }
 
-    /** All string fields of the blob (used for masking). */
+    /** All string fields of the blob (used for masking). Blank -> empty (creds dropped on soft delete). */
     fun parseAll(credentialsJson: String): Map<String, String> {
+        if (credentialsJson.isBlank()) return emptyMap()
         val root = readTree(credentialsJson)
         val result = mutableMapOf<String, String>()
         root.properties().forEach { (key, node) -> result[key] = node.asString() }

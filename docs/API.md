@@ -23,7 +23,8 @@ via `server.port`). All endpoints require an authenticated session except login.
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
 | Post management (drafts, overrides) | ✅     |                                                                                       |
-| Delete published post on platform   | ❌     | Local delete only today (see `DELETE /api/posts/{id}`)                                |
+| Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
+| Delete published post on platform   | ❌     | `deletePublications=true` returns `501` until implemented                             |
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
 | AI provider management + usage      | ❌     | Design below                                                                          |
 | AI text generation / chat           | ❌     | Design below                                                                          |
@@ -45,11 +46,15 @@ via `server.port`). All endpoints require an authenticated session except login.
 
 | HTTP | When                                                                                                                         |
 |------|------------------------------------------------------------------------------------------------------------------------------|
-| 400  | validation failure, malformed body, illegal state (e.g. editing a PUBLISHED post)                                            |
+| 400  | validation failure, malformed body, illegal state (e.g. editing a PUBLISHED post, deleting one without `deletePublications`) |
 | 401  | not authenticated (or failed login); wrong-credentials from login returns `{"message": "..."}` (auth-controller-local shape) |
-| 404  | unknown id / endpoint                                                                                                        |
+| 404  | unknown id / endpoint — including soft-deleted accounts and posts                                                            |
+| 501  | recognized but not implemented (`deletePublications=true`)                                                                   |
 | 502  | upstream platform/AI API failure (`PlatformException`)                                                                       |
 | 500  | unexpected server error (logged)                                                                                             |
+
+**Query flags** use camelCase + `true`/`false` (`showDeleted=true`, `deletePublications=false`).
+(Spring also accepts `yes/no`, `on/off`, `1/0` — tolerated but undocumented.)
 
 **Enums**
 
@@ -93,14 +98,14 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 
 ## Social accounts
 
-| Method | Path                               | Description                            | Status |
-|--------|------------------------------------|----------------------------------------|--------|
-| GET    | `/api/social-accounts`             | List (credentials masked)              | ✅     |
-| POST   | `/api/social-accounts`             | Create                                 | ✅     |
-| GET    | `/api/social-accounts/{id}`        | Get one                                | ✅     |
-| PUT    | `/api/social-accounts/{id}`        | Replace displayName and/or credentials | ✅     |
-| DELETE | `/api/social-accounts/{id}`        | Delete                                 | ✅     |
-| POST   | `/api/social-accounts/{id}/verify` | Cheap "who am I" platform call         | ✅     |
+| Method | Path                                | Description                            | Status |
+|--------|-------------------------------------|----------------------------------------|--------|
+| GET    | `/api/social-accounts?showDeleted=` | List (credentials masked)              | ✅     |
+| POST   | `/api/social-accounts`              | Create                                 | ✅     |
+| GET    | `/api/social-accounts/{id}`         | Get one                                | ✅     |
+| PUT    | `/api/social-accounts/{id}`         | Replace displayName and/or credentials | ✅     |
+| DELETE | `/api/social-accounts/{id}`         | Soft delete (credentials dropped)      | ✅     |
+| POST   | `/api/social-accounts/{id}/verify`  | Cheap "who am I" platform call         | ✅     |
 
 ### AccountDto (all responses)
 
@@ -111,12 +116,19 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
   "displayName": "My Page",
   "status": "ACTIVE",
   "credentialsMasked": { "pageId": "••••2345", "pageAccessToken": "••••1234" },
-  "createdAt": "2026-09-22T15:24:58.902685Z"
+  "createdAt": "2026-09-22T15:24:58.902685Z",
+  "deletedAt": null
 }
 ```
 
 Secrets are **never** returned in full — only masked hints. Updating credentials
 resets `status` to `UNVERIFIED`.
+
+**Soft delete:** `DELETE /api/social-accounts/{id}` → `204`. The row survives
+(publication history references it), `deletedAt` is set, and the stored
+credentials are **dropped** (`credentialsMasked` becomes empty). A deleted
+account behaves as missing everywhere: `GET/PUT/verify` → `404`, publishing to
+it → `404`. It reappears only in `GET ?showDeleted=true`.
 
 ### POST /api/social-accounts
 
@@ -149,14 +161,14 @@ error (e.g. `"Facebook API error (400): Malformed access token"`). Always `200`.
 
 ## Posts
 
-| Method | Path                                 | Description                    | Status |
-|--------|--------------------------------------|--------------------------------|--------|
-| GET    | `/api/posts?status=DRAFT\|PUBLISHED` | List, newest first             | ✅     |
-| POST   | `/api/posts`                         | Create DRAFT                   | ✅     |
-| GET    | `/api/posts/{id}`                    | Detail **incl. publications**  | ✅     |
-| PUT    | `/api/posts/{id}`                    | Edit (DRAFT only)              | ✅     |
-| DELETE | `/api/posts/{id}`                    | Delete post + its publications | 🚧     |
-| POST   | `/api/posts/{id}/publish`            | Publish to selected accounts   | ✅     |
+| Method | Path                                                   | Description                    | Status |
+|--------|--------------------------------------------------------|--------------------------------|--------|
+| GET    | `/api/posts?status=DRAFT\|PUBLISHED&showDeleted=`      | List, newest first             | ✅     |
+| POST   | `/api/posts`                                           | Create DRAFT                   | ✅     |
+| GET    | `/api/posts/{id}`                                      | Detail **incl. publications**  | ✅     |
+| PUT    | `/api/posts/{id}`                                      | Edit (DRAFT only)              | ✅     |
+| DELETE | `/api/posts/{id}?deletePublications=`                  | Soft delete                    | ✅     |
+| POST   | `/api/posts/{id}/publish`                              | Publish to selected accounts   | ✅     |
 
 ### POST /api/posts
 
@@ -182,7 +194,7 @@ since targets are chosen then.
   "content": { "title": null, "text": "generic body" },
   "status": "DRAFT",
   "overrides": { "FACEBOOK": { "title": null, "text": "facebook variant" } },
-  "createdAt": "...", "updatedAt": "...",
+  "createdAt": "...", "updatedAt": "...", "deletedAt": null,
   "publications": [ ...PublicationDto ]
 }
 ```
@@ -197,11 +209,21 @@ list responses.
 `overrides` (replaced wholesale; each entry must include text). Non-DRAFT post →
 `400 "Only DRAFT posts can be edited"`.
 
-### DELETE /api/posts/{id} 🚧
+### DELETE /api/posts/{id}?deletePublications= ✅
 
-`204`. Removes the post and its local publication rows. **Does not delete the post on
-the platforms** — planned extension: `DELETE /api/posts/{id}/publications/{publicationId}`
-that calls the platform delete API (FB supports deleting Page feed posts).
+Soft delete; the post vanishes from all endpoints (`404`, like unknown ids) but its
+`Publication` rows stay queryable as history — publications are never removed.
+`deletePublications` states what happens to the platform copies:
+
+| Post state  | Flag          | Result                                              |
+|-------------|---------------|-----------------------------------------------------|
+| `DRAFT`     | absent or any | `204` — nothing exists on platforms, flag ignored   |
+| `PUBLISHED` | absent        | `400` — explicit choice required                    |
+| `PUBLISHED` | `false`       | `204` — local soft delete only, platform posts stay |
+| `PUBLISHED` | `true`        | `501` — platform-side deletion not implemented yet  |
+
+Deleted posts reappear only via `GET /api/posts?showDeleted=true` (combinable with
+`status`). Editing or publishing a deleted post → `404`.
 
 ### POST /api/posts/{id}/publish
 
@@ -250,6 +272,10 @@ Semantics:
   "errorMessage": null, "publishedAt": "...", "createdAt": "..."
 }
 ```
+
+`platform` and `accountName` are **publish-time snapshots** — they survive account
+renames (verify refreshes `displayName`) and account soft-deletes. `accountId` keeps
+the FK link for future per-account queries.
 
 ---
 

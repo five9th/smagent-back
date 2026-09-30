@@ -83,18 +83,18 @@ POST /api/auth/login            {username, password}       -> sets session cooki
 POST /api/auth/logout
 GET  /api/auth/me
 
-GET    /api/social-accounts                                 credentials masked
+GET    /api/social-accounts?showDeleted=                       credentials masked
 POST   /api/social-accounts        {platform, credentials, displayName?}
 GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}   {displayName?, credentials?}
-DELETE /api/social-accounts/{id}                            
-POST   /api/social-accounts/{id}/verify                     cheap "who am I" call
+DELETE /api/social-accounts/{id}                              soft delete, creds dropped
+POST   /api/social-accounts/{id}/verify                        cheap "who am I" call
 
-GET    /api/posts?status=DRAFT|PUBLISHED
+GET    /api/posts?status=DRAFT|PUBLISHED&showDeleted=
 POST   /api/posts                  {content: {title?, text}, overrides?}   title required for Reddit
 GET    /api/posts/{id}                                          incl. publications
 PUT    /api/posts/{id}             DRAFT posts only
-DELETE /api/posts/{id}                                          ⚠ currently does not delete the actual post from social platforms (if it was published)
+DELETE /api/posts/{id}?deletePublications=                    soft delete; flag required for PUBLISHED posts (true -> 501 for now)
 POST   /api/posts/{id}/publish     {accountIds: []}             per-target results
 
 GET    /api/publications?postId=                                flat attempt log

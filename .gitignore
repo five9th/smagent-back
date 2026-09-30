@@ -49,3 +49,6 @@ out/
 ### Other ###
 /TODO.txt
 mynotes/
+
+### Python ###
+__pycache__/

@@ -98,8 +98,9 @@ class SmagentApi:
             body["displayName"] = display_name
         return self._client.request("POST", "/api/social-accounts", body)
 
-    def list_accounts(self):
-        return self._client.request("GET", "/api/social-accounts")
+    def list_accounts(self, show_deleted: bool = False):
+        path = "/api/social-accounts" + ("?showDeleted=true" if show_deleted else "")
+        return self._client.request("GET", path)
 
     def get_account(self, account_id):
         return self._client.request("GET", f"/api/social-accounts/{account_id}")
@@ -125,8 +126,10 @@ class SmagentApi:
             body["overrides"] = self._overrides_dict(overrides)
         return self._client.request("POST", "/api/posts", body)
 
-    def list_posts(self, status: str | None = None):
-        path = "/api/posts" + (f"?status={status}" if status else "")
+    def list_posts(self, status: str | None = None, show_deleted: bool = False):
+        params = [p for p in (f"status={status}" if status else None,
+                              "showDeleted=true" if show_deleted else None) if p]
+        path = "/api/posts" + (("?" + "&".join(params)) if params else "")
         return self._client.request("GET", path)
 
     def get_post(self, post_id):
@@ -141,8 +144,12 @@ class SmagentApi:
             body["overrides"] = self._overrides_dict(overrides)
         return self._client.request("PUT", f"/api/posts/{post_id}", body)
 
-    def delete_post(self, post_id):
-        return self._client.request("DELETE", f"/api/posts/{post_id}")
+    def delete_post(self, post_id, delete_publications=UNSET):
+        # PUBLISHED posts require an explicit choice; true -> 501 until implemented
+        path = f"/api/posts/{post_id}"
+        if delete_publications is not UNSET:
+            path += f"?deletePublications={'true' if delete_publications else 'false'}"
+        return self._client.request("DELETE", path)
 
     # --- publishing ---
     def publish(self, post_id, account_ids: list):

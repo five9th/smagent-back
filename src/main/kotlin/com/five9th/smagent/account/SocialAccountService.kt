@@ -9,9 +9,9 @@ import com.five9th.smagent.platform.CredentialParser
 import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.SocialPlatformAdapter
 import com.five9th.smagent.repo.SocialAccountRepository
-import org.springframework.data.domain.Sort
 import org.springframework.stereotype.Service
 import tools.jackson.databind.json.JsonMapper
+import java.time.Instant
 
 @Service
 class SocialAccountService(
@@ -21,11 +21,19 @@ class SocialAccountService(
 ) {
     private val mapper = JsonMapper.builder().build()
 
-    fun list(): List<AccountDto> =
-        accounts.findAll(Sort.by(Sort.Direction.DESC, "createdAt")).map { toDto(it) }
+    fun list(showDeleted: Boolean = false): List<AccountDto> {
+        val all = if (showDeleted) {
+            accounts.findAllByOrderByCreatedAtDesc()
+        } else {
+            accounts.findAllByDeletedAtIsNullOrderByCreatedAtDesc()
+        }
+        return all.map { toDto(it) }
+    }
 
+    /** Soft-deleted accounts behave as missing (404) everywhere. */
     fun get(id: Long): SocialAccount =
-        accounts.findById(id).orElseThrow { NotFoundException("Social account $id not found") }
+        accounts.findByIdAndDeletedAtIsNull(id)
+            ?: throw NotFoundException("Social account $id not found")
 
     fun getDto(id: Long): AccountDto = toDto(get(id))
 
@@ -52,8 +60,12 @@ class SocialAccountService(
         return toDto(accounts.save(account))
     }
 
+    /** Soft delete: keeps the row (publication history references it) but drops the credentials. */
     fun delete(id: Long) {
-        accounts.delete(get(id))
+        val account = get(id)
+        account.deletedAt = Instant.now()
+        account.credentialsEnc = "" // secrets don't outlive the account
+        accounts.save(account)
     }
 
     /** Cheap "who am I" call against the platform; updates status and displayName. */
@@ -95,11 +107,16 @@ class SocialAccountService(
         status = account.status,
         credentialsMasked = maskCredentials(account),
         createdAt = account.createdAt,
+        deletedAt = account.deletedAt,
     )
 
     private fun maskCredentials(account: SocialAccount): Map<String, String> =
-        CredentialParser.parseAll(crypto.decrypt(account.credentialsEnc))
-            .mapValues { (_, value) -> mask(value) }
+        if (account.credentialsEnc.isBlank()) {
+            emptyMap() // soft-deleted: credentials dropped
+        } else {
+            CredentialParser.parseAll(crypto.decrypt(account.credentialsEnc))
+                .mapValues { (_, value) -> mask(value) }
+        }
 
     private fun mask(value: String): String =
         if (value.length > 8) "••••" + value.takeLast(4) else "••••"

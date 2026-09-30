@@ -43,14 +43,21 @@ class PublishService(
     }
 
     private fun publishToAccount(post: Post, accountId: Long): PublishOutcome {
-        val account = accounts.findById(accountId)
-            .orElseThrow { NotFoundException("Social account $accountId not found") }
+        val account = accounts.findByIdAndDeletedAtIsNull(accountId)
+            ?: throw NotFoundException("Social account $accountId not found")
 
         val adapter = adapters.firstOrNull { it.platform == account.platform }
 
-        // Record the attempt before the external call
+        // Record the attempt before the external call; snapshots survive later
+        // account rename or soft-delete
         val publication = publications.save(
-            Publication(post = post, socialAccount = account, status = PublicationStatus.PENDING)
+            Publication(
+                post = post,
+                socialAccount = account,
+                platform = account.platform,
+                accountName = account.displayName,
+                status = PublicationStatus.PENDING,
+            )
         )
 
         if (adapter == null) {
@@ -105,8 +112,8 @@ object PublicationMapper {
         id = p.id,
         postId = p.post.id,
         accountId = p.socialAccount.id,
-        platform = p.socialAccount.platform,
-        accountName = p.socialAccount.displayName,
+        platform = p.platform,
+        accountName = p.accountName,
         status = p.status,
         externalUrl = p.externalUrl,
         errorMessage = p.errorMessage,

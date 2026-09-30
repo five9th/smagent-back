@@ -23,6 +23,7 @@ data class AccountDto(
     val status: AccountStatus,
     val credentialsMasked: Map<String, String>,
     val createdAt: Instant,
+    val deletedAt: Instant? = null,
 )
 
 data class VerifyResponse(

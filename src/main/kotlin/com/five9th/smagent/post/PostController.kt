@@ -22,8 +22,10 @@ class PostController(
 ) {
 
     @GetMapping
-    fun list(@RequestParam(required = false) status: PostStatus?): List<PostDto> =
-        postService.list(status)
+    fun list(
+        @RequestParam(required = false) status: PostStatus?,
+        @RequestParam(defaultValue = "false") showDeleted: Boolean,
+    ): List<PostDto> = postService.list(status, showDeleted)
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
@@ -38,7 +40,10 @@ class PostController(
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun delete(@PathVariable id: Long) = postService.delete(id)
+    fun delete(
+        @PathVariable id: Long,
+        @RequestParam(required = false) deletePublications: Boolean?,
+    ) = postService.delete(id, deletePublications)
 
     @PostMapping("/{id}/publish")
     fun publish(@PathVariable id: Long, @Valid @RequestBody request: PublishRequest): PublishResponse =

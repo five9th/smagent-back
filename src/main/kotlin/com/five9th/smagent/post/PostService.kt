@@ -1,6 +1,7 @@
 package com.five9th.smagent.post
 
 import com.five9th.smagent.common.NotFoundException
+import com.five9th.smagent.common.NotImplementedException
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.domain.Post
 import com.five9th.smagent.domain.PostContent
@@ -18,18 +19,21 @@ class PostService(
     private val publications: PublicationRepository,
 ) {
 
-    fun list(status: PostStatus?): List<PostDto> {
-        val all = when (status) {
-            null -> posts.findAllByOrderByCreatedAtDesc()
-            else -> posts.findByStatusOrderByCreatedAtDesc(status)
+    fun list(status: PostStatus?, showDeleted: Boolean = false): List<PostDto> {
+        val all = when {
+            showDeleted && status != null -> posts.findByStatusOrderByCreatedAtDesc(status)
+            showDeleted -> posts.findAllByOrderByCreatedAtDesc()
+            status != null -> posts.findByStatusAndDeletedAtIsNullOrderByCreatedAtDesc(status)
+            else -> posts.findAllByDeletedAtIsNullOrderByCreatedAtDesc()
         }
         return all.map { toDto(it, includePublications = false) }
     }
 
     fun getDto(id: Long): PostDto = toDto(get(id), includePublications = true)
 
-    fun get(id: Long): Post = posts.findById(id)
-        .orElseThrow { NotFoundException("Post $id not found") }
+    /** Soft-deleted posts behave as missing (404) everywhere. */
+    fun get(id: Long): Post = posts.findByIdAndDeletedAtIsNull(id)
+        ?: throw NotFoundException("Post $id not found")
 
     fun create(request: CreatePostRequest): PostDto {
         validateOverrides(request.overrides)
@@ -59,10 +63,28 @@ class PostService(
         return toDto(posts.save(post), includePublications = true)
     }
 
-    fun delete(id: Long) {
+    /**
+     * Soft delete; publications are kept as history.
+     *
+     * `deletePublications` (whether to also delete the post from the platforms) is
+     * only meaningful for PUBLISHED posts: for those it must be stated explicitly
+     * (400 otherwise); `true` is not implemented yet (501). DRAFT posts ignore it.
+     */
+    fun delete(id: Long, deletePublications: Boolean?) {
         val post = get(id)
-        publications.deleteAll(publications.findByPostId(id))
-        posts.delete(post)
+        if (post.status == PostStatus.PUBLISHED) {
+            if (deletePublications == null) {
+                throw IllegalArgumentException(
+                    "Post $id is PUBLISHED. State explicitly what happens to its platform posts: " +
+                        "pass deletePublications=false (local delete only) or true (also delete on platforms — not implemented yet)."
+                )
+            }
+            if (deletePublications) {
+                throw NotImplementedException("Deleting published posts from platforms is not implemented yet")
+            }
+        }
+        post.deletedAt = Instant.now()
+        posts.save(post)
     }
 
     fun markPublishedIfAnySuccess(post: Post) {
@@ -84,6 +106,7 @@ class PostService(
         overrides = post.overrides.mapValues { PostContentDto(title = it.value.title, text = it.value.text) },
         createdAt = post.createdAt,
         updatedAt = post.updatedAt,
+        deletedAt = post.deletedAt,
         publications = if (includePublications && post.id != null) {
             val postId = post.id!!
             publications.findByPostIdOrderByCreatedAtDesc(postId).map { PublicationMapper.toDto(it) }

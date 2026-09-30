@@ -29,6 +29,7 @@ data class PostDto(
     val overrides: Map<Platform, PostContentDto>,
     val createdAt: Instant,
     val updatedAt: Instant,
+    val deletedAt: Instant? = null,
     val publications: List<PublicationDto> = emptyList(),
 ) {
     data class PostContentDto(

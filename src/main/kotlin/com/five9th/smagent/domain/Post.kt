@@ -39,6 +39,9 @@ class Post(
 
     @Column(nullable = false)
     var updatedAt: Instant = Instant.now(),
+
+    /** Soft delete marker; null = live. Publications are kept as history. */
+    var deletedAt: Instant? = null,
 ) {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

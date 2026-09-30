@@ -34,6 +34,9 @@ class SocialAccount(
 
     @Column(nullable = false)
     var createdAt: Instant = Instant.now(),
+
+    /** Soft delete marker; null = live. Credentials are blanked on delete. */
+    var deletedAt: Instant? = null,
 ) {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

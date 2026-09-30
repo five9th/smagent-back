@@ -24,6 +24,14 @@ class Publication(
     @JoinColumn(name = "social_account_id", nullable = false)
     var socialAccount: SocialAccount,
 
+    /** Publish-time snapshots; survive account rename/soft-delete. */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 20)
+    var platform: Platform,
+
+    @Column(nullable = false, length = 200)
+    var accountName: String,
+
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     var status: PublicationStatus = PublicationStatus.PENDING,

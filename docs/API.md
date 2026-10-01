@@ -24,6 +24,7 @@ via `server.port`). All endpoints require an authenticated session except login.
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
 | Post management (drafts, overrides) | ✅     |                                                                                       |
 | Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
+| Demo feedback list                  | ✅     | Demo-only; standalone items, no relations, no soft delete                             |
 | Delete published post on platform   | ❌     | `deletePublications=true` returns `501` until implemented                             |
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
 | AI provider management + usage      | ❌     | Design below                                                                          |
@@ -278,6 +279,28 @@ Semantics:
 `platform` and `accountName` are **publish-time snapshots** — they survive account
 renames (verify refreshes `displayName`) and account soft-deletes. `accountId` keeps
 the FK link for future per-account queries.
+
+---
+
+## Demo feedback (demo-only) ✅
+
+A simple list of text messages a user can add/delete and check/uncheck. For demos
+only — standalone items, no relations to other entities, no soft delete, hard
+deleted for real.
+
+| Method | Path                  | Description                        | Status |
+|--------|-----------------------|------------------------------------|--------|
+| GET    | `/api/feedback`       | List, newest first                 | ✅     |
+| POST   | `/api/feedback`       | Add `{text}`                       | ✅     |
+| PATCH  | `/api/feedback/{id}`  | Edit and/or check/uncheck          | ✅     |
+| DELETE | `/api/feedback/{id}`  | Delete (hard)                      | ✅     |
+
+```json
+{ "id": 1, "text": "try the facebook adapter", "checked": false, "createdAt": "..." }
+```
+
+`POST` body: `{ "text": "..." }` (required, non-blank). `PATCH` body: any of
+`{ "text": "...", "checked": true }`. Blank text → `400`, unknown id → `404`.
 
 ---
 

@@ -1,6 +1,7 @@
 package com.five9th.smagent.repo
 
 import com.five9th.smagent.domain.AppUser
+import com.five9th.smagent.domain.FeedbackItem
 import com.five9th.smagent.domain.Post
 import com.five9th.smagent.domain.PostStatus
 import com.five9th.smagent.domain.Publication
@@ -28,4 +29,8 @@ interface PostRepository : JpaRepository<Post, Long> {
 interface PublicationRepository : JpaRepository<Publication, Long> {
     fun findByPostIdOrderByCreatedAtDesc(postId: Long): List<Publication>
     fun findByPostId(postId: Long): List<Publication>
+}
+
+interface FeedbackItemRepository : JpaRepository<FeedbackItem, Long> {
+    fun findAllByOrderByCreatedAtDesc(): List<FeedbackItem>
 }

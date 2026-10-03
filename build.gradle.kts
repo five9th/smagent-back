@@ -48,33 +48,36 @@ kotlin {
 // The `version` above is the single source of truth:
 // - buildInfo() generates META-INF/build-info.properties from it at build time,
 //   which /actuator/info serves as build.version (no auth, see SecurityConfig);
-// - syncReadmeVersion below propagates it into README.md.
+// - syncDocsVersion below propagates it into README.md and docs/API.md.
 springBoot {
     buildInfo()
 }
 
-// Rewrites the <!-- gradle:version -->…<!-- /gradle:version --> span in README.md
+// Rewrites the <!-- gradle:version -->…<!-- /gradle:version --> span in each doc
 // to project.version. Wired into processResources so any build/test/run keeps the
-// README in sync; fails loudly if the marker is removed.
-val syncReadmeVersion = tasks.register("syncReadmeVersion") {
-    description = "Rewrites the <!-- gradle:version -->…<!-- /gradle:version --> span in README.md"
+// docs in sync; fails loudly if a marker is removed.
+val syncDocsVersion = tasks.register("syncDocsVersion") {
+    description = "Rewrites the <!-- gradle:version -->…<!-- /gradle:version --> span in README.md and docs/API.md"
     val version = project.version.toString()
-    val readmeFile = layout.projectDirectory.file("README.md").asFile
+    val docFiles = listOf("README.md", "docs/API.md").map { layout.projectDirectory.file(it).asFile }
     inputs.property("version", version)
-    outputs.file(readmeFile)
+    outputs.files(docFiles)
     doLast {
         val marker = Regex("<!--\\s*gradle:version\\s*-->.*?<!--\\s*/gradle:version\\s*-->")
-        val text = readmeFile.readText()
-        check(marker.containsMatchIn(text)) {
-            "README.md is missing the <!-- gradle:version -->…<!-- /gradle:version --> marker"
+        val replacement = "<!-- gradle:version -->$version<!-- /gradle:version -->"
+        for (file in docFiles) {
+            val text = file.readText()
+            check(marker.containsMatchIn(text)) {
+                "${file.path} is missing the <!-- gradle:version -->…<!-- /gradle:version --> marker"
+            }
+            val updated = text.replaceFirst(marker, replacement)
+            if (updated != text) file.writeText(updated)
         }
-        val updated = text.replaceFirst(marker, "<!-- gradle:version -->$version<!-- /gradle:version -->")
-        if (updated != text) readmeFile.writeText(updated)
     }
 }
 
 tasks.processResources {
-    dependsOn(syncReadmeVersion)
+    dependsOn(syncDocsVersion)
 }
 
 tasks.withType<Test> {

@@ -1,5 +1,7 @@
 # SMAgent API Reference
 
+Version: `<!-- gradle:version -->0.0.4-SNAPSHOT<!-- /gradle:version -->`
+
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
 the two public actuator endpoints in [Operational endpoints](#operational-endpoints).

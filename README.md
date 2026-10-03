@@ -120,8 +120,8 @@ attempt (even failed) is recorded as a `Publication` row; a post becomes
 The app version lives in `build.gradle.kts` (`version = …`) and is the single
 source of truth: `springBoot { buildInfo() }` bakes it into the jar as
 `META-INF/build-info.properties` (served by `GET /actuator/info` as
-`build.version`), and the `syncReadmeVersion` task rewrites the version at the
-top of this README on every build — don't edit it by hand.
+`build.version`), and the `syncDocsVersion` task rewrites the version lines at
+the top of this README and `docs/API.md` on every build — don't edit them by hand.
 
 Adding a platform = one class implementing `SocialPlatformAdapter`
 (`platform`, `requiredCredentialFields`, `verify`, `publish`). Dispatch is by

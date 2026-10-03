@@ -21,6 +21,12 @@ server:
         http-only: true # JS don't see cookies
         same-site: lax
 
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info # only these two exist without auth (SecurityConfig)
+
 smagent:
   cors:
     allowed-origins: http://localhost:5173

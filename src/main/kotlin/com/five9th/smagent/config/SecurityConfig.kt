@@ -52,6 +52,10 @@ class SecurityConfig {
             authorizeHttpRequests {
                 authorize("/api/auth/login", permitAll)
                 authorize("/h2-console/**", permitAll)
+                // Actuator: public health probe + build info (version); everything
+                // else under /actuator stays authenticated and unexposed.
+                authorize("/actuator/health/**", permitAll)
+                authorize("/actuator/info/**", permitAll)
                 authorize(anyRequest, authenticated)
             }
             sessionManagement {

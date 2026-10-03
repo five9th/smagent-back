@@ -1,5 +1,7 @@
 # SMAgent
 
+Version: `<!-- gradle:version -->0.0.2-SNAPSHOT<!-- /gradle:version -->`
+
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a
 publication log that records every publish attempt.
@@ -26,6 +28,7 @@ export SMAGENT_ADMIN_PASSWORD='choose-a-password'   # required on first start
 ```
 
 - API on `http://localhost:8080/api`
+- Health on `http://localhost:8080/actuator/health`, version on `http://localhost:8080/actuator/info` — both public, no auth
 - H2 console on `http://localhost:8080/h2-console` (JDBC URL `jdbc:h2:file:./data/smagent`) — disable in production with `spring.h2.console.enabled=false`
 
 State lives in `./data/` (H2 database + auto-generated encryption key file). Back
@@ -113,6 +116,12 @@ attempt (even failed) is recorded as a `Publication` row; a post becomes
 ./gradlew test        # unit + integration (in-memory H2, mocked adapters)
 ./gradlew bootRun
 ```
+
+The app version lives in `build.gradle.kts` (`version = …`) and is the single
+source of truth: `springBoot { buildInfo() }` bakes it into the jar as
+`META-INF/build-info.properties` (served by `GET /actuator/info` as
+`build.version`), and the `syncReadmeVersion` task rewrites the version at the
+top of this README on every build — don't edit it by hand.
 
 Adding a platform = one class implementing `SocialPlatformAdapter`
 (`platform`, `requiredCredentialFields`, `verify`, `publish`). Dispatch is by

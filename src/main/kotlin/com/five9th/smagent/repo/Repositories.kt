@@ -16,6 +16,7 @@ interface SocialAccountRepository : JpaRepository<SocialAccount, Long> {
     fun findAllByDeletedAtIsNullOrderByCreatedAtDesc(): List<SocialAccount>
     fun findAllByOrderByCreatedAtDesc(): List<SocialAccount>
     fun findByIdAndDeletedAtIsNull(id: Long): SocialAccount?
+    fun findAllByIdInAndDeletedAtIsNull(ids: List<Long>): List<SocialAccount>
 }
 
 interface PostRepository : JpaRepository<Post, Long> {

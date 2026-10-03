@@ -10,6 +10,7 @@ import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
 import org.mockito.kotlin.argumentCaptor
+import org.mockito.kotlin.never
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
@@ -229,6 +230,24 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             contentType = MediaType.APPLICATION_JSON
             content = """{"accountIds":[999]}"""
         }.andExpect { status { isNotFound() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `one unknown account id aborts the round without publishing the valid ones`() {
+        val fbAccount = createAccount("FACEBOOK", "\"pageId\":\"1\",\"pageAccessToken\":\"tok\"")
+        val postId = createPost("t", "text")
+
+        mvc.post("/api/posts/{id}/publish", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountIds":[$fbAccount,999]}"""
+        }.andExpect { status { isNotFound() } }
+
+        // the valid account must not have been touched either
+        verify(facebookAdapter, never()).publish(any(), any())
+        mvc.get("/api/publications") { param("postId", postId.toString()) }.andExpect {
+            jsonPath("$.length()") { value(0) }
+        }
     }
 
     @WithMockUser(roles = ["OWNER"])

@@ -19,7 +19,8 @@ import java.time.Instant
  * Publishes a post to the selected accounts. Mirrors the "record before external
  * call" rule: every attempt gets a Publication row (PENDING) before the platform
  * API is touched, then is updated to SUCCESS or FAILED. One failing target never
- * blocks the others.
+ * blocks the others. Account IDs are all resolved up front, so an unknown or
+ * soft-deleted ID fails the request before anything is published.
  */
 @Service
 class PublishService(
@@ -33,7 +34,15 @@ class PublishService(
 
     fun publish(postId: Long, accountIds: List<Long>): PublishResponse {
         val post = postService.get(postId)
-        val results = accountIds.map { accountId -> publishToAccount(post, accountId) }
+        // Resolve every account before any Publication row is created: one bad ID
+        // then fails the whole request (404) instead of aborting a half-executed
+        // round whose status refresh would never run.
+        val accountsById = accounts.findAllByIdInAndDeletedAtIsNull(accountIds).associateBy { it.id }
+        val missing = accountIds.filter { it !in accountsById }
+        if (missing.isNotEmpty()) {
+            throw NotFoundException("Social accounts not found: ${missing.joinToString(", ")}")
+        }
+        val results = accountIds.map { publishToAccount(post, accountsById.getValue(it)) }
         postService.refreshPostStatus(post, results.map { it.status })
         return PublishResponse(
             postId = post.id,
@@ -42,10 +51,7 @@ class PublishService(
         )
     }
 
-    private fun publishToAccount(post: Post, accountId: Long): PublishOutcome {
-        val account = accounts.findByIdAndDeletedAtIsNull(accountId)
-            ?: throw NotFoundException("Social account $accountId not found")
-
+    private fun publishToAccount(post: Post, account: SocialAccount): PublishOutcome {
         val adapter = adapters.firstOrNull { it.platform == account.platform }
 
         // Record the attempt before the external call; snapshots survive later

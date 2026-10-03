@@ -1,7 +1,8 @@
 # SMAgent API Reference
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
-via `server.port`). All endpoints require an authenticated session except login.
+via `server.port`). All endpoints require an authenticated session except login and
+the two public actuator endpoints in [Operational endpoints](#operational-endpoints).
 
 **Status legend**
 
@@ -25,6 +26,7 @@ via `server.port`). All endpoints require an authenticated session except login.
 | Post management (drafts, overrides) | ✅     |                                                                                       |
 | Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
 | Demo feedback list                  | ✅     | Demo-only; standalone items, no relations, no soft delete                             |
+| Health & version endpoints          | ✅     | `/actuator/health`, `/actuator/info` — no auth, only exposed actuator endpoints       |
 | Delete published post on platform   | ❌     | `deletePublications=true` returns `501` until implemented                             |
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
 | AI provider management + usage      | ❌     | Design below                                                                          |
@@ -301,6 +303,16 @@ deleted for real.
 
 `POST` body: `{ "text": "..." }` (required, non-blank). `PATCH` body: any of
 `{ "text": "...", "checked": true }`. Blank text → `400`, unknown id → `404`.
+
+## Operational endpoints ✅
+
+Spring Boot Actuator endpoints, outside the `/api` prefix and **available without
+authentication**. Only these two actuator endpoints are exposed.
+
+| Method | Path               | Description                                                           |
+|--------|--------------------|-----------------------------------------------------------------------|
+| GET    | `/actuator/health` | Liveness probe: `{"status":"UP"}` (details hidden by default)         |
+| GET    | `/actuator/info`   | Build info incl. version: `{"build":{"version":"…","artifact":…, …}}` |
 
 ---
 

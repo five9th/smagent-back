@@ -126,6 +126,27 @@ def test_suit_1(api: SmagentApi):
         print("Failed:", ", ".join(failed))
         sys.exit(1)
 
+def test_suit_2(api: SmagentApi):
+    print("===== test_suit_2 =====\n")
+
+    # --- actuator: public health + version, everything else locked ---
+    anon = SmagentApi(BASE)  # deliberately anonymous
+
+    s, d = anon.health()
+    check("anonymous /actuator/health -> 200 UP", s == 200 and d.get("status") == "UP", f"got {s} {d}")
+
+    s, d = anon.info()
+    check("anonymous /actuator/info -> 200 with build.version",
+          s == 200 and isinstance(d, dict) and d.get("build", {}).get("version"), f"got {s} {d}")
+
+    s, _ = anon.request("GET", "/actuator/env")
+    check("unexposed /actuator/env -> 401", s == 401, f"got {s}")
+
+    # also fine while logged in
+    s, d = api.health()
+    check("authenticated /actuator/health -> 200", s == 200 and d.get("status") == "UP", f"got {s} {d}")
+
+
 def main():
     if not PASSWORD:
         print("Export SMAGENT_TEST_PASSWORD first (the owner password you seeded with).")
@@ -135,6 +156,7 @@ def main():
     api = SmagentApi(BASE)
 
     test_suit_1(api)
+    test_suit_2(api)
 
 if __name__ == "__main__":
     main()

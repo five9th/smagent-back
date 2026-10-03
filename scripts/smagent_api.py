@@ -78,6 +78,13 @@ class SmagentApi:
     def request(self, method: str, path: str, body: dict | None = None):
         return self._client.request(method, path, body)
 
+    # --- actuator (no auth) ---
+    def health(self):
+        return self._client.request("GET", "/actuator/health")
+
+    def info(self):
+        return self._client.request("GET", "/actuator/info")
+
     # --- auth ---
     def login(self, username: str | None = None, password: str | None = None):
         return self._client.request("POST", "/api/auth/login", {

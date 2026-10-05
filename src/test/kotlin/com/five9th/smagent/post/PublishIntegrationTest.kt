@@ -44,11 +44,14 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
         whenever(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
         whenever(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
+        whenever(facebookPageTokenAdapter.nonSecretCredentialFields).thenReturn(setOf("pageId"))
         whenever(facebookPageTokenAdapter.canPublish).thenReturn(true)
         whenever(redditPasswordAdapter.platform).thenReturn(Platform.REDDIT)
         whenever(redditPasswordAdapter.authMethod).thenReturn(AuthMethod.PASSWORD_GRANT)
         whenever(redditPasswordAdapter.requiredCredentialFields)
             .thenReturn(setOf("clientId", "clientSecret", "username", "password", "subreddit"))
+        whenever(redditPasswordAdapter.nonSecretCredentialFields)
+            .thenReturn(setOf("clientId", "username", "subreddit"))
         whenever(redditPasswordAdapter.canPublish).thenReturn(true)
     }
 

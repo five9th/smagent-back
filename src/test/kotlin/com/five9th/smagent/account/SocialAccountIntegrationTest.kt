@@ -34,6 +34,7 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
         `when`(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
         `when`(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
         `when`(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
+        `when`(facebookPageTokenAdapter.nonSecretCredentialFields).thenReturn(setOf("pageId"))
         `when`(facebookPageTokenAdapter.canPublish).thenReturn(true)
         `when`(facebookPageTokenAdapter.verify(anyString())).thenReturn(VerifyResult("Fake Page"))
     }
@@ -71,7 +72,7 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.status") { value("UNVERIFIED") }
             jsonPath("$.canPublish") { value(true) }
             jsonPath("$.displayName") { value("FACEBOOK account") }
-            jsonPath("$.credentialsMasked.pageId") { value("••••6789") }
+            jsonPath("$.credentialsMasked.pageId") { value("123456789") }
             jsonPath("$.credentialsMasked.pageAccessToken") { value("••••1234") }
         }
     }
@@ -110,7 +111,7 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.canPublish") { value(false) }
             jsonPath("$.status") { value("UNVERIFIED") }
             jsonPath("$.displayName") { value("My X page") }
-            jsonPath("$.credentialsMasked.profileUrl") { value("••••page") }
+            jsonPath("$.credentialsMasked.profileUrl") { value("https://x.com/my_page") }
         }
     }
 

@@ -33,5 +33,6 @@ class AdapterRegistry(private val adapters: List<SocialPlatformAdapter>) {
         authMethod = authMethod,
         canPublish = canPublish,
         requiredCredentialFields = requiredCredentialFields,
+        nonSecretCredentialFields = nonSecretCredentialFields,
     )
 }

@@ -31,6 +31,8 @@ class PlatformIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$[0].loginOptions[0].authMethod") { value("PAGE_ACCESS_TOKEN") }
             jsonPath("$[0].loginOptions[0].canPublish") { value(true) }
             jsonPath("$[0].loginOptions[0].requiredCredentialFields.length()") { value(2) }
+            jsonPath("$[0].loginOptions[0].nonSecretCredentialFields.length()") { value(1) }
+            jsonPath("$[0].loginOptions[0].nonSecretCredentialFields[0]") { value("pageId") }
             jsonPath("$[0].loginOptions[1].authMethod") { value("PROFILE_URL") }
             jsonPath("$[0].loginOptions[1].canPublish") { value(false) }
             jsonPath("$[1].platform") { value("REDDIT") }

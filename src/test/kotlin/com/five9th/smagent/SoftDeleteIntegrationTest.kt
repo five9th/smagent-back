@@ -37,6 +37,7 @@ class SoftDeleteIntegrationTest(@Autowired val mvc: MockMvc) {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
         whenever(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
         whenever(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
+        whenever(facebookPageTokenAdapter.nonSecretCredentialFields).thenReturn(setOf("pageId"))
         whenever(facebookPageTokenAdapter.publish(any(), any()))
             .thenReturn(PublishResult("https://facebook.com/1/posts/abc"))
     }

@@ -13,4 +13,6 @@ data class LoginOptionDto(
     val authMethod: AuthMethod,
     val canPublish: Boolean,
     val requiredCredentialFields: Set<String>,
+    /** Subset of requiredCredentialFields safe to show in full (the rest are masked). */
+    val nonSecretCredentialFields: Set<String>,
 )

@@ -115,12 +115,15 @@ class SocialAccountService(
         deletedAt = account.deletedAt,
     )
 
+    /** Mask secrets, not IDs: adapter-declared non-secret fields are shown in full. */
     private fun maskCredentials(account: SocialAccount): Map<String, String> =
         if (account.credentialsEnc.isBlank()) {
             emptyMap() // soft-deleted: credentials dropped
         } else {
+            val nonSecret = registry.find(account.platform, account.authMethod)
+                ?.nonSecretCredentialFields ?: emptySet() // unknown login option: mask everything
             CredentialParser.parseAll(crypto.decrypt(account.credentialsEnc))
-                .mapValues { (_, value) -> mask(value) }
+                .mapValues { (field, value) -> if (field in nonSecret) value else mask(value) }
         }
 
     private fun mask(value: String): String =

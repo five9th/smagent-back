@@ -33,6 +33,7 @@ class FacebookPageAccessTokenAdapter(
     override val platform = Platform.FACEBOOK
     override val authMethod = AuthMethod.PAGE_ACCESS_TOKEN
     override val requiredCredentialFields = setOf("pageId", "pageAccessToken")
+    override val nonSecretCredentialFields = setOf("pageId")
     override val canPublish = true
 
     private val graphVersion = props.facebook.graphApiVersion

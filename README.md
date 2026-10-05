@@ -96,7 +96,7 @@ POST /api/auth/logout
 GET  /api/auth/me
 
 GET    /api/platforms                                          platforms + login options
-GET    /api/social-accounts?showDeleted=                       credentials masked
+GET    /api/social-accounts?showDeleted=                       secrets masked, IDs shown
 POST   /api/social-accounts        {platform, authMethod, credentials, displayName?}
 GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}   {displayName?, credentials?}

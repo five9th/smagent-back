@@ -41,6 +41,7 @@ class RedditPasswordGrantAdapter(
     override val authMethod = AuthMethod.PASSWORD_GRANT
     override val requiredCredentialFields =
         setOf("clientId", "clientSecret", "username", "password", "subreddit")
+    override val nonSecretCredentialFields = setOf("clientId", "username", "subreddit")
     override val canPublish = true
 
     private val apiClient = restClientBuilder.baseUrl(props.reddit.baseUrl).build()

@@ -25,6 +25,7 @@ abstract class ProfileUrlAdapter(
 
     final override val authMethod = AuthMethod.PROFILE_URL
     final override val requiredCredentialFields = setOf(PROFILE_URL_FIELD)
+    final override val nonSecretCredentialFields = setOf(PROFILE_URL_FIELD) // the link is the point
     final override val canPublish = false
 
     /** No platform API involved — only the URL shape is checked. */

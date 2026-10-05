@@ -19,6 +19,13 @@ interface SocialPlatformAdapter {
     /** Fields that must be present in the credential JSON (validated on create/update). */
     val requiredCredentialFields: Set<String>
 
+    /**
+     * Credential fields that identify the target rather than authenticate it
+     * (page IDs, usernames, URLs) — shown in full in `credentialsMasked`.
+     * Everything else, including unknown fields, is masked: secrets fail closed.
+     */
+    val nonSecretCredentialFields: Set<String>
+
     /** False when the login option gives no platform API access (PROFILE_URL). */
     val canPublish: Boolean
 

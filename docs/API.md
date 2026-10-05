@@ -51,7 +51,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 
 | HTTP | When                                                                                                                         |
 |------|------------------------------------------------------------------------------------------------------------------------------|
-| 400  | validation failure, malformed body, illegal state (e.g. editing a published post, deleting one without `deletePublications`) |
+| 400  | validation failure, malformed body, illegal state (e.g. editing a PUBLISHED post, deleting one without `deletePublications`) |
 | 401  | not authenticated (or failed login); wrong-credentials from login returns `{"message": "..."}` (auth-controller-local shape) |
 | 404  | unknown id / endpoint — including soft-deleted accounts and posts                                                            |
 | 501  | recognized but not implemented (`deletePublications=true`)                                                                   |
@@ -66,7 +66,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 ```
 Platform:          FACEBOOK | REDDIT
 AccountStatus:     UNVERIFIED | ACTIVE | INVALID
-PostStatus:        DRAFT | PARTIALLY_PUBLISHED | PUBLISHED
+PostStatus:        DRAFT | PUBLISHED
 PublicationStatus: PENDING | SUCCESS | FAILED
 ```
 
@@ -166,14 +166,14 @@ error (e.g. `"Facebook API error (400): Malformed access token"`). Always `200`.
 
 ## Posts
 
-| Method | Path                                                                   | Description                   | Status |
-|--------|------------------------------------------------------------------------|-------------------------------|--------|
-| GET    | `/api/posts?status=DRAFT\|PARTIALLY_PUBLISHED\|PUBLISHED&showDeleted=` | List, newest first            | ✅     |
-| POST   | `/api/posts`                                                           | Create DRAFT                  | ✅     |
-| GET    | `/api/posts/{id}`                                                      | Detail **incl. publications** | ✅     |
-| PUT    | `/api/posts/{id}`                                                      | Edit (DRAFT only)             | ✅     |
-| DELETE | `/api/posts/{id}?deletePublications=`                                  | Soft delete                   | ✅     |
-| POST   | `/api/posts/{id}/publish`                                              | Publish to selected accounts  | ✅     |
+| Method | Path                                                   | Description                    | Status |
+|--------|--------------------------------------------------------|--------------------------------|--------|
+| GET    | `/api/posts?status=DRAFT\|PUBLISHED&showDeleted=`      | List, newest first             | ✅     |
+| POST   | `/api/posts`                                           | Create DRAFT                   | ✅     |
+| GET    | `/api/posts/{id}`                                      | Detail **incl. publications**  | ✅     |
+| PUT    | `/api/posts/{id}`                                      | Edit (DRAFT only)              | ✅     |
+| DELETE | `/api/posts/{id}?deletePublications=`                  | Soft delete                    | ✅     |
+| POST   | `/api/posts/{id}/publish`                              | Publish to selected accounts   | ✅     |
 
 ### POST /api/posts
 
@@ -218,15 +218,14 @@ list responses.
 
 Soft delete; the post vanishes from all endpoints (`404`, like unknown ids) but its
 `Publication` rows stay queryable as history — publications are never removed.
-`deletePublications` states what happens to the platform copies (only non-DRAFT
-posts have copies):
+`deletePublications` states what happens to the platform copies:
 
-| Post state                          | Flag          | Result                                              |
-|-------------------------------------|---------------|-----------------------------------------------------|
-| `DRAFT`                             | absent or any | `204` — nothing exists on platforms, flag ignored   |
-| `PARTIALLY_PUBLISHED` / `PUBLISHED` | absent        | `400` — explicit choice required                    |
-| `PARTIALLY_PUBLISHED` / `PUBLISHED` | `false`       | `204` — local soft delete only, platform posts stay |
-| `PARTIALLY_PUBLISHED` / `PUBLISHED` | `true`        | `501` — platform-side deletion not implemented yet  |
+| Post state  | Flag          | Result                                              |
+|-------------|---------------|-----------------------------------------------------|
+| `DRAFT`     | absent or any | `204` — nothing exists on platforms, flag ignored   |
+| `PUBLISHED` | absent        | `400` — explicit choice required                    |
+| `PUBLISHED` | `false`       | `204` — local soft delete only, platform posts stay |
+| `PUBLISHED` | `true`        | `501` — platform-side deletion not implemented yet  |
 
 Deleted posts reappear only via `GET /api/posts?showDeleted=true` (combinable with
 `status`). Editing or publishing a deleted post → `404`.
@@ -242,7 +241,7 @@ Deleted posts reappear only via `GET /api/posts?showDeleted=true` (combinable wi
 ```json
 {
   "postId": 1,
-  "postStatus": "PARTIALLY_PUBLISHED",
+  "postStatus": "PUBLISHED",
   "results": [
     { "accountId": 1, "platform": "FACEBOOK", "accountName": "My Page",
       "status": "SUCCESS", "externalUrl": "https://www.facebook.com/123/posts/456",
@@ -256,9 +255,8 @@ Deleted posts reappear only via `GET /api/posts?showDeleted=true` (combinable wi
 
 Semantics:
 - Every attempt writes a `Publication` row **before** the platform call (`PENDING` → `SUCCESS`/`FAILED`).
-- Post status after a publish round: **all** targets succeed → `PUBLISHED`; **some** → `PARTIALLY_PUBLISHED`; **none** → stays `DRAFT`.
-- Republishing an already-published post is allowed (adds rows — natural retry). Status is judged per round, so a retry that succeeds everywhere upgrades `PARTIALLY_PUBLISHED` → `PUBLISHED`.
-- Only `DRAFT` posts can be edited; `PARTIALLY_PUBLISHED` and `PUBLISHED` cannot.
+- Post becomes `PUBLISHED` when ≥1 target succeeds; stays `DRAFT` if all fail.
+- Republishing an already-published post is allowed (adds rows — natural retry).
 - Unknown `accountId` → `404` for the whole request.
 
 ---

@@ -93,11 +93,11 @@ PUT    /api/social-accounts/{id}   {displayName?, credentials?}
 DELETE /api/social-accounts/{id}                              soft delete, creds dropped
 POST   /api/social-accounts/{id}/verify                        cheap "who am I" call
 
-GET    /api/posts?status=DRAFT|PARTIALLY_PUBLISHED|PUBLISHED&showDeleted=
+GET    /api/posts?status=DRAFT|PUBLISHED&showDeleted=
 POST   /api/posts                  {content: {title?, text}, overrides?}   title required for Reddit
 GET    /api/posts/{id}                                          incl. publications
 PUT    /api/posts/{id}             DRAFT posts only
-DELETE /api/posts/{id}?deletePublications=                    soft delete; flag required for non-DRAFT posts (true -> 501 for now)
+DELETE /api/posts/{id}?deletePublications=                    soft delete; flag required for PUBLISHED posts (true -> 501 for now)
 POST   /api/posts/{id}/publish     {accountIds: []}             per-target results
 
 GET    /api/publications?postId=                                flat attempt log

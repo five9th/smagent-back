@@ -97,7 +97,7 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             content = """{"accountIds":[$fbAccount,$rdAccount]}"""
         }.andExpect {
             status { isOk() }
-            jsonPath("$.postStatus") { value("PARTIALLY_PUBLISHED") }
+            jsonPath("$.postStatus") { value("PUBLISHED") }
             jsonPath("$.results.length()") { value(2) }
             jsonPath("$.results[0].status") { value("SUCCESS") }
             jsonPath("$.results[0].externalUrl") { value("https://facebook.com/1/posts/abc") }
@@ -118,32 +118,9 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
         }
         mvc.get("/api/posts/{id}", postId).andExpect {
             status { isOk() }
-            jsonPath("$.status") { value("PARTIALLY_PUBLISHED") }
+            jsonPath("$.status") { value("PUBLISHED") }
             jsonPath("$.publications.length()") { value(2) }
         }
-    }
-
-    @WithMockUser(roles = ["OWNER"])
-    @Test
-    fun `successful republish upgrades partially published to published`() {
-        val fbAccount = createAccount("FACEBOOK", "\"pageId\":\"1\",\"pageAccessToken\":\"tok\"")
-        val postId = createPost("t", "text")
-
-        // first round: failure
-        whenever(facebookAdapter.publish(any(), any()))
-            .thenThrow(PlatformException("temporary failure"))
-        mvc.post("/api/posts/{id}/publish", postId) {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"accountIds":[$fbAccount]}"""
-        }.andExpect { jsonPath("$.postStatus") { value("DRAFT") } }
-
-        // second round: success -> PUBLISHED (all attempts across rounds succeeded)
-        whenever(facebookAdapter.publish(any(), any()))
-            .thenReturn(PublishResult("https://facebook.com/1/posts/abc"))
-        mvc.post("/api/posts/{id}/publish", postId) {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"accountIds":[$fbAccount]}"""
-        }.andExpect { jsonPath("$.postStatus") { value("PUBLISHED") } }
     }
 
     @WithMockUser(roles = ["OWNER"])

@@ -43,7 +43,7 @@ class PublishService(
             throw NotFoundException("Social accounts not found: ${missing.joinToString(", ")}")
         }
         val results = accountIds.map { publishToAccount(post, accountsById.getValue(it)) }
-        postService.refreshPostStatus(post, results.map { it.status })
+        postService.markPublishedIfAnySuccess(post)
         return PublishResponse(
             postId = post.id,
             postStatus = postService.get(postId).status,

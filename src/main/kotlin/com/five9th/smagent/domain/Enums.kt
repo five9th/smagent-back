@@ -5,7 +5,7 @@ enum class Platform { FACEBOOK, REDDIT }
 enum class Role { OWNER }
 
 /** Lifecycle of a post. Scheduling may add SCHEDULED later. */
-enum class PostStatus { DRAFT, PARTIALLY_PUBLISHED, PUBLISHED }
+enum class PostStatus { DRAFT, PUBLISHED }
 
 /** One row per post x account publish attempt. */
 enum class PublicationStatus { PENDING, SUCCESS, FAILED }

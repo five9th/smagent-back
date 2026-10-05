@@ -72,7 +72,7 @@ class PostService(
      */
     fun delete(id: Long, deletePublications: Boolean?) {
         val post = get(id)
-        if (post.status == PostStatus.PUBLISHED || post.status == PostStatus.PARTIALLY_PUBLISHED) { // copies exist on platforms
+        if (post.status == PostStatus.PUBLISHED) {
             if (deletePublications == null) {
                 throw IllegalArgumentException(
                     "Post $id is PUBLISHED. State explicitly what happens to its platform posts: " +
@@ -87,21 +87,10 @@ class PostService(
         posts.save(post)
     }
 
-    /**
-     * Post-publish status refresh, judged over the CURRENT publish round only
-     * (so a republish that fixes earlier failures upgrades the status):
-     * every attempt SUCCESS -> PUBLISHED; some -> PARTIALLY_PUBLISHED; none -> DRAFT.
-     */
-    fun refreshPostStatus(post: Post, roundStatuses: List<PublicationStatus>) {
-        val status = when {
-            roundStatuses.isNotEmpty() && roundStatuses.all { it == PublicationStatus.SUCCESS } ->
-                PostStatus.PUBLISHED
-            roundStatuses.any { it == PublicationStatus.SUCCESS } ->
-                PostStatus.PARTIALLY_PUBLISHED
-            else -> null // stays DRAFT
-        }
-        if (status != null && post.status != status) {
-            post.status = status
+    fun markPublishedIfAnySuccess(post: Post) {
+        val anySuccess = publications.findByPostId(post.id!!).any { it.status == PublicationStatus.SUCCESS }
+        if (anySuccess && post.status != PostStatus.PUBLISHED) {
+            post.status = PostStatus.PUBLISHED
             post.updatedAt = Instant.now()
             posts.save(post)
         }

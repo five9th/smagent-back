@@ -48,6 +48,10 @@ class PostController(
     @PostMapping("/{id}/publish")
     fun publish(@PathVariable id: Long, @Valid @RequestBody request: PublishRequest): PublishResponse =
         publishService.publish(id, request.accountIds)
+
+    @PostMapping("/{id}/publish-manual")
+    fun publishManual(@PathVariable id: Long, @Valid @RequestBody request: ManualPublishRequest): PublishResponse =
+        publishService.publishManually(id, request)
 }
 
 @RestController

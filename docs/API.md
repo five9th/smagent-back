@@ -25,6 +25,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Platform/login-option catalog       | ✅     | `GET /api/platforms` — drives the account-creation form                               |
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
+| Manual publish tracking              | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                   |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
 | Post management (drafts, overrides) | ✅     |                                                                                       |
 | Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
@@ -232,6 +233,7 @@ publication whose message carries the link (see publish below).
 | PUT    | `/api/posts/{id}`                                      | Edit (DRAFT only)              | ✅     |
 | DELETE | `/api/posts/{id}?deletePublications=`                  | Soft delete                    | ✅     |
 | POST   | `/api/posts/{id}/publish`                              | Publish to selected accounts   | ✅     |
+| POST   | `/api/posts/{id}/publish-manual`                       | Record a by-hand publication   | ✅     |
 
 ### POST /api/posts
 
@@ -303,10 +305,10 @@ Deleted posts reappear only via `GET /api/posts?showDeleted=true` (combinable wi
   "results": [
     { "accountId": 1, "platform": "FACEBOOK", "accountName": "My Page",
       "status": "SUCCESS", "externalUrl": "https://www.facebook.com/123/posts/456",
-      "errorMessage": null },
+      "errorMessage": null, "publishedManually": false },
     { "accountId": 2, "platform": "REDDIT", "accountName": "u/me -> r/test",
       "status": "FAILED", "externalUrl": null,
-      "errorMessage": "Reddit posts require a non-empty title" }
+      "errorMessage": "Reddit posts require a non-empty title", "publishedManually": false }
   ]
 }
 ```
@@ -316,6 +318,42 @@ Semantics:
 - Post becomes `PUBLISHED` when ≥1 target succeeds; stays `DRAFT` if all fail.
 - Republishing an already-published post is allowed (adds rows — natural retry).
 - Unknown `accountId` → `404` for the whole request.
+- Accounts whose login option has no API access (`canPublish: false`) fail here —
+  use `/publish-manual` below to record posts made by hand.
+
+### POST /api/posts/{id}/publish-manual ✅
+
+Records a publication that was made **by hand**: the user opened the platform
+(ideally via the account's `profileUrl`) and posted there themselves. No
+platform API is called; **any** account is eligible, including (but not limited
+to) `PROFILE_URL` manual accounts.
+
+```json
+{ "accountId": 3, "externalUrl": "https://x.com/my_page/status/1234" }
+```
+
+→ `200`, same shape as `/publish` with a single result row:
+
+```json
+{
+  "postId": 1,
+  "postStatus": "PUBLISHED",
+  "results": [
+    { "accountId": 3, "platform": "X", "accountName": "My X page",
+      "status": "SUCCESS", "externalUrl": "https://x.com/my_page/status/1234",
+      "errorMessage": null, "publishedManually": true }
+  ]
+}
+```
+
+Semantics:
+- Writes a `Publication` row immediately: `SUCCESS`, `publishedManually: true`,
+  `publishedAt` = now, `externalUrl` if provided (else `null`).
+- Counts toward the post's `PUBLISHED` flip exactly like an API success
+  (post stops being editable, delete needs `deletePublications`).
+- Repeatable without dedup — log a second share, or fix a wrong URL by recording again.
+- `externalUrl`, when present, must be a well-formed http(s) URL → else `400`.
+- Unknown or soft-deleted post / account → `404`.
 
 ---
 
@@ -330,7 +368,7 @@ Semantics:
 ```json
 {
   "id": 1, "postId": 1, "accountId": 1, "platform": "FACEBOOK",
-  "accountName": "My Page", "status": "SUCCESS",
+  "accountName": "My Page", "status": "SUCCESS", "publishedManually": false,
   "externalUrl": "https://www.facebook.com/123/posts/456",
   "errorMessage": null, "publishedAt": "...", "createdAt": "..."
 }
@@ -338,7 +376,8 @@ Semantics:
 
 `platform` and `accountName` are **publish-time snapshots** — they survive account
 renames (verify refreshes `displayName`) and account soft-deletes. `accountId` keeps
-the FK link for future per-account queries.
+the FK link for future per-account queries. `publishedManually: true` marks rows
+recorded via `publish-manual` (by-hand posts) instead of an adapter attempt.
 
 ---
 

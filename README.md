@@ -11,7 +11,8 @@ Current scope (MVP):
 - **Platforms:** Facebook Pages, Reddit (text posts), X & LinkedIn (manual link
   accounts only — no API access yet)
 - **Auth:** one owner account, session cookie (HttpOnly, SameSite=Lax)
-- **Publishing:** synchronous "publish now", per-target success/failure
+- **Publishing:** synchronous "publish now", per-target success/failure;
+  by-hand posts recorded via `publish-manual`
 - **Not yet:** AI generation, media upload, scheduling
 
 ## Stack
@@ -109,6 +110,7 @@ GET    /api/posts/{id}                                          incl. publicatio
 PUT    /api/posts/{id}             DRAFT posts only
 DELETE /api/posts/{id}?deletePublications=                    soft delete; flag required for PUBLISHED posts (true -> 501 for now)
 POST   /api/posts/{id}/publish     {accountIds: []}             per-target results
+POST   /api/posts/{id}/publish-manual {accountId, externalUrl?}  record a by-hand post
 
 GET    /api/publications?postId=                                flat attempt log
 ```

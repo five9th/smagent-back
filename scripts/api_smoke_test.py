@@ -115,6 +115,25 @@ def test_suit_1(api: SmagentApi):
     s, pls = api.publications(post_id)
     check("publication log has 2 attempts", s == 200 and len(pls) == 2, f"got {s} ({len(pls) if isinstance(pls, list) else pls})")
 
+    # --- manual publish tracking (PROFILE_URL account, no platform API) ---
+    s, x = api.create_account("X", "PROFILE_URL", {"profileUrl": "https://x.com/my_page"})
+    x_id = x.get("id") if isinstance(x, dict) else None
+
+    s, mpost = api.create_post(text="manual publish target")
+    mpost_id = mpost.get("id")
+
+    s, mpub = api.publish_manual(mpost_id, x_id, "https://x.com/my_page/status/123")
+    check("publish-manual -> 200, PUBLISHED, manual row",
+          s == 200 and mpub.get("postStatus") == "PUBLISHED"
+          and mpub.get("results", [{}])[0].get("publishedManually") is True, f"got {s} {mpub}")
+
+    s, bad = api.publish_manual(mpost_id, x_id, "not a url")
+    check("publish-manual with bad URL -> 400", s == 400, f"got {s} {bad}")
+
+    s, _ = api.delete_post(mpost_id, delete_publications=False)
+    check("delete manually-published post -> 204", s == 204, f"got {s}")
+    api.delete_account(x_id)
+
     # --- cleanup ---
     s, _ = api.delete_post(post_id)
     check("delete post -> 204", s == 204, f"got {s}")

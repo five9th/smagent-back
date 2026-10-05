@@ -236,6 +236,97 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
+    fun `manual publish records SUCCESS, flips the post and is repeatable`() {
+        val manualAccount = createAccount(
+            "X", "PROFILE_URL",
+            "\"profileUrl\":\"https://x.com/my_page\""
+        )
+        val postId = createPost("t", "text")
+
+        mvc.post("/api/posts/{id}/publish-manual", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountId":$manualAccount,"externalUrl":"https://x.com/my_page/status/1"}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.postStatus") { value("PUBLISHED") }
+            jsonPath("$.results.length()") { value(1) }
+            jsonPath("$.results[0].status") { value("SUCCESS") }
+            jsonPath("$.results[0].publishedManually") { value(true) }
+            jsonPath("$.results[0].externalUrl") { value("https://x.com/my_page/status/1") }
+        }
+
+        // repeatable, and externalUrl is optional the second time
+        mvc.post("/api/posts/{id}/publish-manual", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountId":$manualAccount}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.results[0].status") { value("SUCCESS") }
+            jsonPath("$.results[0].externalUrl") { value(org.hamcrest.Matchers.nullValue()) }
+        }
+
+        mvc.get("/api/publications") { param("postId", postId.toString()) }.andExpect {
+            jsonPath("$.length()") { value(2) }
+            jsonPath("$[0].publishedManually") { value(true) }
+            jsonPath("$[0].status") { value("SUCCESS") }
+        }
+
+        // manual success counts: the post is PUBLISHED and no longer editable
+        mvc.put("/api/posts/{id}", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"content":{"text":"nope"}}"""
+        }.andExpect { status { isBadRequest() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `manual publish works for an API account without calling the adapter`() {
+        val fbAccount = createAccount("FACEBOOK", "PAGE_ACCESS_TOKEN", "\"pageId\":\"1\",\"pageAccessToken\":\"tok\"")
+        val postId = createPost("t", "text")
+
+        mvc.post("/api/posts/{id}/publish-manual", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountId":$fbAccount}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.results[0].status") { value("SUCCESS") }
+            jsonPath("$.results[0].platform") { value("FACEBOOK") }
+        }
+
+        verify(facebookPageTokenAdapter, never()).publish(any(), any())
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `manual publish with malformed externalUrl returns 400`() {
+        val manualAccount = createAccount(
+            "X", "PROFILE_URL",
+            "\"profileUrl\":\"https://x.com/my_page\""
+        )
+        val postId = createPost("t", "text")
+
+        mvc.post("/api/posts/{id}/publish-manual", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountId":$manualAccount,"externalUrl":"not a url"}"""
+        }.andExpect { status { isBadRequest() } }
+
+        mvc.get("/api/publications") { param("postId", postId.toString()) }.andExpect {
+            jsonPath("$.length()") { value(0) }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `manual publish to unknown account returns 404`() {
+        val postId = createPost("t", "text")
+        mvc.post("/api/posts/{id}/publish-manual", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountId":999}"""
+        }.andExpect { status { isNotFound() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
     fun `publish to unknown account returns 404`() {
         val postId = createPost("t", "text")
         mvc.post("/api/posts/{id}/publish", postId) {

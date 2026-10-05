@@ -6,6 +6,7 @@ import com.five9th.smagent.domain.PublicationStatus
 import jakarta.validation.Valid
 import jakarta.validation.constraints.NotBlank
 import jakarta.validation.constraints.NotEmpty
+import jakarta.validation.constraints.NotNull
 import java.time.Instant
 
 data class CreatePostRequest(
@@ -45,6 +46,7 @@ data class PublicationDto(
     val platform: Platform,
     val accountName: String,
     val status: PublicationStatus,
+    val publishedManually: Boolean,
     val externalUrl: String?,
     val errorMessage: String?,
     val publishedAt: Instant?,
@@ -55,11 +57,18 @@ data class PublishRequest(
     @field:NotEmpty val accountIds: List<Long>,
 )
 
+data class ManualPublishRequest(
+    @field:NotNull val accountId: Long,
+    /** Optional link to the by-hand post, kept in the history. */
+    val externalUrl: String? = null,
+)
+
 data class PublishOutcome(
     val accountId: Long?,
     val platform: Platform,
     val accountName: String,
     val status: PublicationStatus,
+    val publishedManually: Boolean,
     val externalUrl: String?,
     val errorMessage: String?,
 )

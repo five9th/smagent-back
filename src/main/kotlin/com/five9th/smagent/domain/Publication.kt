@@ -11,6 +11,7 @@ import jakarta.persistence.Id
 import jakarta.persistence.JoinColumn
 import jakarta.persistence.ManyToOne
 import jakarta.persistence.Table
+import org.hibernate.annotations.ColumnDefault
 import java.time.Instant
 
 @Entity
@@ -43,6 +44,11 @@ class Publication(
     var errorMessage: String? = null,
 
     var publishedAt: Instant? = null,
+
+    /** True when the row records a by-hand post (publish-manual), not an adapter attempt. */
+    @ColumnDefault("false")
+    @Column(nullable = false)
+    var publishedManually: Boolean = false,
 
     @Column(nullable = false)
     var createdAt: Instant = Instant.now(),

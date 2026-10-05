@@ -13,6 +13,7 @@ import com.five9th.smagent.repo.PublicationRepository
 import com.five9th.smagent.repo.SocialAccountRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
+import java.net.URI
 import java.time.Instant
 
 /**
@@ -89,6 +90,7 @@ class PublishService(
                 platform = account.platform,
                 accountName = account.displayName,
                 status = PublicationStatus.SUCCESS,
+                publishedManually = publication.publishedManually,
                 externalUrl = result.externalUrl,
                 errorMessage = null,
             )
@@ -107,9 +109,66 @@ class PublishService(
             platform = account.platform,
             accountName = account.displayName,
             status = PublicationStatus.FAILED,
+            publishedManually = publication.publishedManually,
             externalUrl = null,
             errorMessage = message,
         )
+    }
+
+    /**
+     * Records a publication made by hand: no adapter call, just a SUCCESS row
+     * (publishedManually) that counts toward the post's PUBLISHED flip.
+     */
+    fun publishManually(postId: Long, request: ManualPublishRequest): PublishResponse {
+        val post = postService.get(postId)
+        val account = accounts.findByIdAndDeletedAtIsNull(request.accountId)
+            ?: throw NotFoundException("Social account ${request.accountId} not found")
+        val externalUrl = request.externalUrl?.let { requireHttpUrl(it) }
+
+        val publication = publications.save(
+            Publication(
+                post = post,
+                socialAccount = account,
+                platform = account.platform,
+                accountName = account.displayName,
+                status = PublicationStatus.SUCCESS,
+                externalUrl = externalUrl,
+                publishedAt = Instant.now(),
+                publishedManually = true,
+            )
+        )
+        postService.markPublishedIfAnySuccess(post)
+        return PublishResponse(
+            postId = post.id,
+            postStatus = postService.get(postId).status,
+            results = listOf(
+                PublishOutcome(
+                    accountId = account.id,
+                    platform = account.platform,
+                    accountName = account.displayName,
+                    status = publication.status,
+                    publishedManually = publication.publishedManually,
+                    externalUrl = publication.externalUrl,
+                    errorMessage = null,
+                )
+            ),
+        )
+    }
+
+    private fun requireHttpUrl(url: String): String {
+        val uri = try {
+            URI(url)
+        } catch (e: Exception) {
+            throw IllegalArgumentException("externalUrl is not a valid URL: '$url'")
+        }
+        if (uri.scheme !in HTTP_SCHEMES || uri.host.isNullOrBlank()) {
+            throw IllegalArgumentException("externalUrl must be an http(s) URL: '$url'")
+        }
+        return url
+    }
+
+    companion object {
+        private val HTTP_SCHEMES = setOf("http", "https")
     }
 }
 
@@ -121,6 +180,7 @@ object PublicationMapper {
         platform = p.platform,
         accountName = p.accountName,
         status = p.status,
+        publishedManually = p.publishedManually,
         externalUrl = p.externalUrl,
         errorMessage = p.errorMessage,
         publishedAt = p.publishedAt,

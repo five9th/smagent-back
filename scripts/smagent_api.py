@@ -170,6 +170,12 @@ class SmagentApi:
         return self._client.request("POST", f"/api/posts/{post_id}/publish",
                                     {"accountIds": account_ids})
 
+    def publish_manual(self, post_id, account_id, external_url: str | None = None):
+        body: dict = {"accountId": account_id}
+        if external_url is not None:
+            body["externalUrl"] = external_url
+        return self._client.request("POST", f"/api/posts/{post_id}/publish-manual", body)
+
     def publications(self, post_id):
         return self._client.request("GET", f"/api/publications?postId={post_id}")
 

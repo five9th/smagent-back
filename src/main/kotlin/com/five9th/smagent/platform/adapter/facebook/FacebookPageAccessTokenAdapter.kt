@@ -1,7 +1,14 @@
-package com.five9th.smagent.platform
+package com.five9th.smagent.platform.adapter.facebook
 
 import com.five9th.smagent.config.AppProperties
+import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.platform.CredentialParser
+import com.five9th.smagent.platform.PlatformException
+import com.five9th.smagent.platform.PublishCommand
+import com.five9th.smagent.platform.PublishResult
+import com.five9th.smagent.platform.SocialPlatformAdapter
+import com.five9th.smagent.platform.VerifyResult
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
@@ -18,13 +25,15 @@ import tools.jackson.databind.json.JsonMapper
  * pages_manage_posts + pages_read_engagement) effectively never expires.
  */
 @Component
-class FacebookAdapter(
+class FacebookPageAccessTokenAdapter(
     props: AppProperties,
     restClientBuilder: RestClient.Builder,
 ) : SocialPlatformAdapter {
 
     override val platform = Platform.FACEBOOK
+    override val authMethod = AuthMethod.PAGE_ACCESS_TOKEN
     override val requiredCredentialFields = setOf("pageId", "pageAccessToken")
+    override val canPublish = true
 
     private val graphVersion = props.facebook.graphApiVersion
     private val client = restClientBuilder.baseUrl("https://graph.facebook.com").build()

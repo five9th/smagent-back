@@ -62,17 +62,25 @@ def test_suit_1(api: SmagentApi):
     s, _ = anon.list_posts()
     check("anonymous /api/posts -> 401", s == 401, f"got {s}")
 
+    # --- platforms ---
+    s, d = api.platforms()
+    check("platforms -> 200 with login options", s == 200 and isinstance(d, list)
+          and d and d[0].get("loginOptions"), f"got {s} {d}")
+
     # --- social accounts ---
-    s, fb = api.create_account("FACEBOOK", FACEBOOK_CREDS)
+    s, fb = api.create_account("FACEBOOK", "PAGE_ACCESS_TOKEN", FACEBOOK_CREDS)
     check("create facebook account -> 201, masked", s == 201 and "••••" in json.dumps(fb), f"got {s} {fb}")
     fb_id = fb.get("id") if isinstance(fb, dict) else None
 
-    s, rd = api.create_account("REDDIT", REDDIT_CREDS)
+    s, rd = api.create_account("REDDIT", "PASSWORD_GRANT", REDDIT_CREDS)
     check("create reddit account -> 201", s == 201, f"got {s} {rd}")
     rd_id = rd.get("id") if isinstance(rd, dict) else None
 
-    s, bad = api.create_account("FACEBOOK", {"pageId": "123"})
+    s, bad = api.create_account("FACEBOOK", "PAGE_ACCESS_TOKEN", {"pageId": "123"})
     check("create account missing field -> 400", s == 400, f"got {s} {bad}")
+
+    s, bad = api.create_account("FACEBOOK", "PASSWORD_GRANT", {"pageId": "123"})
+    check("create account with wrong login option -> 400", s == 400, f"got {s} {bad}")
 
     s, v = api.verify_account(fb_id)
     # real Graph call with fake token -> ok=false, account INVALID

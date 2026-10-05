@@ -98,9 +98,14 @@ class SmagentApi:
     def me(self):
         return self._client.request("GET", "/api/auth/me")
 
+    # --- platforms ---
+    def platforms(self):
+        return self._client.request("GET", "/api/platforms")
+
     # --- social accounts ---
-    def create_account(self, platform: str, credentials: dict, display_name: str | None = None):
-        body: dict = {"platform": platform, "credentials": credentials}
+    def create_account(self, platform: str, auth_method: str, credentials: dict,
+                       display_name: str | None = None):
+        body: dict = {"platform": platform, "authMethod": auth_method, "credentials": credentials}
         if display_name is not None:
             body["displayName"] = display_name
         return self._client.request("POST", "/api/social-accounts", body)
@@ -112,10 +117,12 @@ class SmagentApi:
     def get_account(self, account_id):
         return self._client.request("GET", f"/api/social-accounts/{account_id}")
 
-    def update_account(self, account_id, display_name=UNSET, credentials=UNSET):
+    def update_account(self, account_id, display_name=UNSET, auth_method=UNSET, credentials=UNSET):
         body: dict = {}
         if display_name is not UNSET:
             body["displayName"] = display_name
+        if auth_method is not UNSET:
+            body["authMethod"] = auth_method
         if credentials is not UNSET:
             body["credentials"] = credentials
         return self._client.request("PUT", f"/api/social-accounts/{account_id}", body)

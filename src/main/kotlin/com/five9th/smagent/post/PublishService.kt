@@ -6,9 +6,9 @@ import com.five9th.smagent.domain.Post
 import com.five9th.smagent.domain.Publication
 import com.five9th.smagent.domain.PublicationStatus
 import com.five9th.smagent.domain.SocialAccount
+import com.five9th.smagent.platform.AdapterRegistry
 import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.PublishCommand
-import com.five9th.smagent.platform.SocialPlatformAdapter
 import com.five9th.smagent.repo.PublicationRepository
 import com.five9th.smagent.repo.SocialAccountRepository
 import org.slf4j.LoggerFactory
@@ -28,7 +28,7 @@ class PublishService(
     private val postService: PostService,
     private val accounts: SocialAccountRepository,
     private val crypto: CryptoService,
-    private val adapters: List<SocialPlatformAdapter>,
+    private val registry: AdapterRegistry,
 ) {
     private val log = LoggerFactory.getLogger(javaClass)
 
@@ -52,7 +52,7 @@ class PublishService(
     }
 
     private fun publishToAccount(post: Post, account: SocialAccount): PublishOutcome {
-        val adapter = adapters.firstOrNull { it.platform == account.platform }
+        val adapter = registry.find(account.platform, account.authMethod)
 
         // Record the attempt before the external call; snapshots survive later
         // account rename or soft-delete
@@ -67,7 +67,7 @@ class PublishService(
         )
 
         if (adapter == null) {
-            return fail(publication, account, "No adapter for platform ${account.platform}")
+            return fail(publication, account, "No adapter for ${account.platform}/${account.authMethod}")
         }
 
         // The per-platform override wins field-by-field; missing fields fall back

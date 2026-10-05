@@ -1,7 +1,14 @@
-package com.five9th.smagent.platform
+package com.five9th.smagent.platform.adapter.reddit
 
 import com.five9th.smagent.config.AppProperties
+import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.platform.CredentialParser
+import com.five9th.smagent.platform.PlatformException
+import com.five9th.smagent.platform.PublishCommand
+import com.five9th.smagent.platform.PublishResult
+import com.five9th.smagent.platform.SocialPlatformAdapter
+import com.five9th.smagent.platform.VerifyResult
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
@@ -25,14 +32,16 @@ import java.util.concurrent.ConcurrentHashMap
  * Credentials: { "clientId", "clientSecret", "username", "password", "subreddit" }
  */
 @Component
-class RedditAdapter(
+class RedditPasswordGrantAdapter(
     props: AppProperties,
     restClientBuilder: RestClient.Builder,
 ) : SocialPlatformAdapter {
 
     override val platform = Platform.REDDIT
+    override val authMethod = AuthMethod.PASSWORD_GRANT
     override val requiredCredentialFields =
         setOf("clientId", "clientSecret", "username", "password", "subreddit")
+    override val canPublish = true
 
     private val apiClient = restClientBuilder.baseUrl(props.reddit.baseUrl).build()
     private val tokenClient = restClientBuilder.baseUrl(props.reddit.tokenUrl).build()

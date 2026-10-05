@@ -22,6 +22,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Session auth (login/logout/me)      | ✅     | HttpOnly `SameSite=Lax` cookie                                                        |
 | Owner seeding from env              | ✅     | Fail-fast without `SMAGENT_ADMIN_PASSWORD`                                            |
 | Social account CRUD + verify        | ✅     | Credentials AES-GCM encrypted, masked in responses                                    |
+| Platform/login-option catalog       | ✅     | `GET /api/platforms` — drives the account-creation form                               |
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
@@ -64,11 +65,15 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 **Enums**
 
 ```
-Platform:          FACEBOOK | REDDIT
+Platform:          FACEBOOK | REDDIT | X | LINKEDIN
+AuthMethod:        PAGE_ACCESS_TOKEN | PASSWORD_GRANT | PROFILE_URL
 AccountStatus:     UNVERIFIED | ACTIVE | INVALID
 PostStatus:        DRAFT | PUBLISHED
 PublicationStatus: PENDING | SUCCESS | FAILED
 ```
+
+`AuthMethod` availability is per platform (see `GET /api/platforms`); only
+`PROFILE_URL` exists on every platform.
 
 ---
 
@@ -101,6 +106,37 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 
 ---
 
+## Platforms
+
+| Method | Path             | Description                                         | Status |
+|--------|------------------|-----------------------------------------------------|--------|
+| GET    | `/api/platforms` | Platforms + their login options (account form menu) | ✅     |
+
+### GET /api/platforms
+
+Read-only catalog built from the adapter beans — one entry per login option.
+`requiredCredentialFields` are the keys the credential JSON must contain.
+
+```json
+[
+  { "platform": "FACEBOOK",
+    "loginOptions": [
+      { "authMethod": "PAGE_ACCESS_TOKEN", "canPublish": true,
+        "requiredCredentialFields": ["pageId", "pageAccessToken"] },
+      { "authMethod": "PROFILE_URL", "canPublish": false,
+        "requiredCredentialFields": ["profileUrl"] }
+    ] },
+  { "platform": "REDDIT", "loginOptions": [ "... PASSWORD_GRANT ...", "... PROFILE_URL ..." ] },
+  { "platform": "X", "loginOptions": [ { "authMethod": "PROFILE_URL", "canPublish": false, "..." : "..." } ] },
+  { "platform": "LINKEDIN", "loginOptions": [ "..." ] }
+]
+```
+
+`canPublish: false` marks login options with no platform API access — accounts
+using them exist as manual links only and cannot be publish targets.
+
+---
+
 ## Social accounts
 
 | Method | Path                                | Description                            | Status |
@@ -108,7 +144,7 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 | GET    | `/api/social-accounts?showDeleted=` | List (credentials masked)              | ✅     |
 | POST   | `/api/social-accounts`              | Create                                 | ✅     |
 | GET    | `/api/social-accounts/{id}`         | Get one                                | ✅     |
-| PUT    | `/api/social-accounts/{id}`         | Replace displayName and/or credentials | ✅     |
+| PUT    | `/api/social-accounts/{id}`         | Replace displayName and/or credentials (+ `authMethod`) | ✅     |
 | DELETE | `/api/social-accounts/{id}`         | Soft delete (credentials dropped)      | ✅     |
 | POST   | `/api/social-accounts/{id}/verify`  | Cheap "who am I" platform call         | ✅     |
 
@@ -118,8 +154,10 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 {
   "id": 1,
   "platform": "FACEBOOK",
+  "authMethod": "PAGE_ACCESS_TOKEN",
   "displayName": "My Page",
   "status": "ACTIVE",
+  "canPublish": true,
   "credentialsMasked": { "pageId": "••••2345", "pageAccessToken": "••••1234" },
   "createdAt": "2026-09-22T15:24:58.902685Z",
   "deletedAt": null
@@ -127,7 +165,8 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 ```
 
 Secrets are **never** returned in full — only masked hints. Updating credentials
-resets `status` to `UNVERIFIED`.
+resets `status` to `UNVERIFIED`; `authMethod` may be switched in the same PUT
+(new credentials required — switching alone → `400`).
 
 **Soft delete:** `DELETE /api/social-accounts/{id}` → `204`. The row survives
 (publication history references it), `deletedAt` is set, and the stored
@@ -138,18 +177,21 @@ it → `404`. It reappears only in `GET ?showDeleted=true`.
 ### POST /api/social-accounts
 
 ```json
-{ "platform": "FACEBOOK", "displayName": "My Page", "credentials": { "...": "..." } }
+{ "platform": "FACEBOOK", "authMethod": "PAGE_ACCESS_TOKEN", "displayName": "My Page",
+  "credentials": { "...": "..." } }
 ```
 
-`displayName` optional (filled by verify). Missing required credential fields → `400`
-listing them.
+`displayName` optional (filled by verify). `authMethod` must be one of the
+platform's login options (`GET /api/platforms`); an unknown combination → `400`.
+Missing required credential fields → `400` listing them.
 
-**Credential shapes per platform**
+**Credential shapes per login option**
 
-| Platform   | Required fields                                                 | Notes                                                                              |
-|------------|-----------------------------------------------------------------|------------------------------------------------------------------------------------|
-| `FACEBOOK` | `pageId`, `pageAccessToken`                                     | Long-lived Page token (README has the walkthrough). Verify → page name.            |
-| `REDDIT`   | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
+| Platform   | `authMethod`      | Required fields                                                 | Notes                                                                              |
+|------------|-------------------|-----------------------------------------------------------------|------------------------------------------------------------------------------------|
+| `FACEBOOK` | `PAGE_ACCESS_TOKEN` | `pageId`, `pageAccessToken`                                   | Long-lived Page token (README has the walkthrough). Verify → page name.            |
+| `REDDIT`   | `PASSWORD_GRANT`  | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
+| any        | `PROFILE_URL`     | `profileUrl`                                                    | Manual only: no API access; account is a link to open and post by hand.            |
 
 ### POST /api/social-accounts/{id}/verify
 
@@ -161,6 +203,11 @@ Calls the platform ("who am I") and updates the account:
 
 Failure → `ok: false`, `account.status: "INVALID"`, `message` carries the upstream
 error (e.g. `"Facebook API error (400): Malformed access token"`). Always `200`.
+
+`PROFILE_URL` accounts never call a platform API: verify only checks that
+`profileUrl` is a well-formed http(s) URL, sets `ACTIVE` on success, and leaves
+the display name as set. Publishing to such an account records a `FAILED`
+publication whose message carries the link (see publish below).
 
 ---
 

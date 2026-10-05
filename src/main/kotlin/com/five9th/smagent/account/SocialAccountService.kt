@@ -3,8 +3,8 @@ package com.five9th.smagent.account
 import com.five9th.smagent.common.NotFoundException
 import com.five9th.smagent.crypto.CryptoService
 import com.five9th.smagent.domain.AccountStatus
-import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.domain.SocialAccount
+import com.five9th.smagent.platform.AdapterRegistry
 import com.five9th.smagent.platform.CredentialParser
 import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.SocialPlatformAdapter
@@ -17,7 +17,7 @@ import java.time.Instant
 class SocialAccountService(
     private val accounts: SocialAccountRepository,
     private val crypto: CryptoService,
-    private val adapters: List<SocialPlatformAdapter>,
+    private val registry: AdapterRegistry,
 ) {
     private val mapper = JsonMapper.builder().build()
 
@@ -38,10 +38,11 @@ class SocialAccountService(
     fun getDto(id: Long): AccountDto = toDto(get(id))
 
     fun create(request: CreateAccountRequest): AccountDto {
-        val adapter = adapterFor(request.platform)
+        val adapter = registry.get(request.platform, request.authMethod)
         validateCredentials(adapter, request.credentials)
         val account = SocialAccount(
             platform = request.platform,
+            authMethod = request.authMethod,
             displayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
                 ?: "${request.platform} account",
             credentialsEnc = crypto.encrypt(mapper.writeValueAsString(request.credentials)),
@@ -52,8 +53,14 @@ class SocialAccountService(
     fun update(id: Long, request: UpdateAccountRequest): AccountDto {
         val account = get(id)
         request.displayName?.trim()?.takeIf { it.isNotEmpty() }?.let { account.displayName = it }
+        if (request.authMethod != null && request.credentials == null) {
+            throw IllegalArgumentException("Changing authMethod requires submitting new credentials")
+        }
         request.credentials?.let {
-            validateCredentials(adapterFor(account.platform), it)
+            val authMethod = request.authMethod ?: account.authMethod
+            val adapter = registry.get(account.platform, authMethod)
+            validateCredentials(adapter, it)
+            account.authMethod = authMethod
             account.credentialsEnc = crypto.encrypt(mapper.writeValueAsString(it))
             account.status = AccountStatus.UNVERIFIED
         }
@@ -71,10 +78,10 @@ class SocialAccountService(
     /** Cheap "who am I" call against the platform; updates status and displayName. */
     fun verify(id: Long): VerifyResponse {
         val account = get(id)
-        val adapter = adapterFor(account.platform)
+        val adapter = registry.get(account.platform, account.authMethod)
         return try {
             val result = adapter.verify(crypto.decrypt(account.credentialsEnc))
-            account.displayName = result.displayName
+            result.displayName?.let { account.displayName = it }
             account.status = AccountStatus.ACTIVE
             accounts.save(account)
             VerifyResponse(toDto(account), ok = true, message = "Credentials verified")
@@ -85,17 +92,13 @@ class SocialAccountService(
         }
     }
 
-    private fun adapterFor(platform: Platform): SocialPlatformAdapter =
-        adapters.firstOrNull { it.platform == platform }
-            ?: throw IllegalArgumentException("Unsupported platform: $platform")
-
     private fun validateCredentials(adapter: SocialPlatformAdapter, credentials: Map<String, String>) {
         val missing = adapter.requiredCredentialFields.filter {
             credentials[it].isNullOrBlank()
         }
         if (missing.isNotEmpty()) {
             throw IllegalArgumentException(
-                "Missing credential field(s) for ${adapter.platform}: ${missing.joinToString(", ")}"
+                "Missing credential field(s) for ${adapter.platform}/${adapter.authMethod}: ${missing.joinToString(", ")}"
             )
         }
     }
@@ -103,8 +106,10 @@ class SocialAccountService(
     private fun toDto(account: SocialAccount): AccountDto = AccountDto(
         id = account.id,
         platform = account.platform,
+        authMethod = account.authMethod,
         displayName = account.displayName,
         status = account.status,
+        canPublish = registry.find(account.platform, account.authMethod)?.canPublish ?: false,
         credentialsMasked = maskCredentials(account),
         createdAt = account.createdAt,
         deletedAt = account.deletedAt,

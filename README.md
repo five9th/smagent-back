@@ -8,7 +8,8 @@ publication log that records every publish attempt.
 
 Current scope (MVP):
 
-- **Platforms:** Facebook Pages, Reddit (text posts)
+- **Platforms:** Facebook Pages, Reddit (text posts), X & LinkedIn (manual link
+  accounts only — no API access yet)
 - **Auth:** one owner account, session cookie (HttpOnly, SameSite=Lax)
 - **Publishing:** synchronous "publish now", per-target success/failure
 - **Not yet:** AI generation, media upload, scheduling
@@ -70,6 +71,14 @@ Maybe I will figure something out later.
    Password grant works for your own account; tokens are fetched hourly and cached.
    2FA on the account breaks password grant.~~
 
+**Any platform — PROFILE_URL login option**
+
+Every platform also supports the manual `PROFILE_URL` option:
+`{ "profileUrl": "https://facebook.com/my_page" }`. The app gets no API access;
+the account is just a link you can open to create posts by hand. Verify only
+checks that the URL is well-formed http(s); publishing to such an account
+records a failed attempt whose message carries the link.
+
 Always run the account **verify** endpoint after pasting credentials — it does a
 cheap "who am I" call and tells you immediately if something is wrong.
 
@@ -86,8 +95,9 @@ POST /api/auth/login            {username, password}       -> sets session cooki
 POST /api/auth/logout
 GET  /api/auth/me
 
+GET    /api/platforms                                          platforms + login options
 GET    /api/social-accounts?showDeleted=                       credentials masked
-POST   /api/social-accounts        {platform, credentials, displayName?}
+POST   /api/social-accounts        {platform, authMethod, credentials, displayName?}
 GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}   {displayName?, credentials?}
 DELETE /api/social-accounts/{id}                              soft delete, creds dropped
@@ -123,6 +133,9 @@ source of truth: `springBoot { buildInfo() }` bakes it into the jar as
 `build.version`), and the `syncDocsVersion` task rewrites the version lines at
 the top of this README and `docs/API.md` on every build — don't edit them by hand.
 
-Adding a platform = one class implementing `SocialPlatformAdapter`
-(`platform`, `requiredCredentialFields`, `verify`, `publish`). Dispatch is by
-enum; nothing else changes.
+Adding a login option = one class implementing `SocialPlatformAdapter`
+(`platform`, `authMethod`, `requiredCredentialFields`, `verify`, `publish`).
+API-backed options live in `platform/adapter/<platform>/`; the manual
+`PROFILE_URL` option is shared — add a one-line `ProfileUrlAdapter` subclass in
+`platform/adapter/common/` so a new platform is usable before it has API
+access. Dispatch is by (platform, authMethod); nothing else changes.

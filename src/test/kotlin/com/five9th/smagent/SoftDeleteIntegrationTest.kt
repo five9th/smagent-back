@@ -1,8 +1,9 @@
 package com.five9th.smagent
 
+import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
-import com.five9th.smagent.platform.FacebookAdapter
 import com.five9th.smagent.platform.PublishResult
+import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdapter
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -29,20 +30,21 @@ import org.springframework.transaction.annotation.Transactional
 class SoftDeleteIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @MockitoBean
-    lateinit var facebookAdapter: FacebookAdapter
+    lateinit var facebookPageTokenAdapter: FacebookPageAccessTokenAdapter
 
     @BeforeEach
     fun stubAdapter() {
-        whenever(facebookAdapter.platform).thenReturn(Platform.FACEBOOK)
-        whenever(facebookAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
-        whenever(facebookAdapter.publish(any(), any()))
+        whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
+        whenever(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
+        whenever(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
+        whenever(facebookPageTokenAdapter.publish(any(), any()))
             .thenReturn(PublishResult("https://facebook.com/1/posts/abc"))
     }
 
     private fun createAccount(name: String): Long {
         val result = mvc.post("/api/social-accounts") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"platform":"FACEBOOK","displayName":"$name","credentials":{"pageId":"1","pageAccessToken":"tok"}}"""
+            content = """{"platform":"FACEBOOK","authMethod":"PAGE_ACCESS_TOKEN","displayName":"$name","credentials":{"pageId":"1","pageAccessToken":"tok"}}"""
         }.andReturn()
         return Regex("\"id\":(\\d+)").find(result.response.contentAsString)!!.groupValues[1].toLong()
     }

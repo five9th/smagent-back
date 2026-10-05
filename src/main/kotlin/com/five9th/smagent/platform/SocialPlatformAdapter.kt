@@ -1,10 +1,11 @@
 package com.five9th.smagent.platform
 
+import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
 
 /**
- * One implementation per supported platform. Dispatch is by [platform];
- * Spring injects all implementations as a list.
+ * One implementation per (platform, authMethod) login option; Spring injects
+ * all implementations as a list (see AdapterRegistry for dispatch).
  *
  * Credential handling: adapters receive the decrypted credential JSON string
  * exactly as the client submitted it and parse their own typed shape.
@@ -12,17 +13,23 @@ import com.five9th.smagent.domain.Platform
 interface SocialPlatformAdapter {
     val platform: Platform
 
+    /** Which login option of [platform] this adapter implements. */
+    val authMethod: AuthMethod
+
     /** Fields that must be present in the credential JSON (validated on create/update). */
     val requiredCredentialFields: Set<String>
 
-    /** Cheap "who am I" call; returns the account's display name on success. */
+    /** False when the login option gives no platform API access (PROFILE_URL). */
+    val canPublish: Boolean
+
+    /** Cheap "who am I" call; a null display name keeps the account's current one. */
     fun verify(credentialsJson: String): VerifyResult
 
     /** Publish text; returns the URL of the created post. */
     fun publish(credentialsJson: String, command: PublishCommand): PublishResult
 }
 
-data class VerifyResult(val displayName: String)
+data class VerifyResult(val displayName: String?)
 
 data class PublishCommand(
     /** Self-post title; Reddit requires it, Facebook ignores it. */

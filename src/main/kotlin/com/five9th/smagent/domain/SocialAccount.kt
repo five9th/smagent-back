@@ -17,6 +17,11 @@ class SocialAccount(
     @Column(nullable = false)
     var platform: Platform,
 
+    /** Login option this account authenticates with (adapter dispatch key). */
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
+    var authMethod: AuthMethod,
+
     /** Human label; refreshed by the verify endpoint (page name / u_name). */
     @Column(nullable = false, length = 200)
     var displayName: String = "",

@@ -58,7 +58,8 @@ def main():
     s, d = api.login()
     check("login -> 200 owner", s == 200 and d.get("role") == "OWNER", f"got {s} {d}")
 
-    s, fb = api.create_account("FACEBOOK", {"pageId": FB_PAGE_ID, "pageAccessToken": FB_TOKEN})
+    s, fb = api.create_account("FACEBOOK", "PAGE_ACCESS_TOKEN",
+                               {"pageId": FB_PAGE_ID, "pageAccessToken": FB_TOKEN})
     check("create facebook account -> 201", s == 201, f"got {s} {fb}")
     fb_id = fb.get("id") if isinstance(fb, dict) else None
 

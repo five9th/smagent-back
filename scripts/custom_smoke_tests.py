@@ -25,7 +25,7 @@ def ts3_create_sa(api: SmagentApi):
     s, d = api.login()
     check("login -> 200 owner", s == 200 and d.get("role") == "OWNER", f"got {s} {d}")
 
-    s, fb = api.create_account("FACEBOOK", FACEBOOK_CREDS)
+    s, fb = api.create_account("FACEBOOK", "PAGE_ACCESS_TOKEN", FACEBOOK_CREDS)
     print(s, fb)
 
     s, d = api.list_accounts()

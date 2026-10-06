@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: `<!-- gradle:version -->0.0.6-SNAPSHOT<!-- /gradle:version -->`
+Version: `<!-- gradle:version -->0.1.0<!-- /gradle:version -->`
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -21,11 +21,11 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 |-------------------------------------|--------|---------------------------------------------------------------------------------------|
 | Session auth (login/logout/me)      | ✅     | HttpOnly `SameSite=Lax` cookie                                                        |
 | Owner seeding from env              | ✅     | Fail-fast without `SMAGENT_ADMIN_PASSWORD`                                            |
-| Social account CRUD + verify        | ✅     | Credentials AES-GCM encrypted; IDs shown, tokens tail-masked, passwords hidden      |
+| Social account CRUD + verify        | ✅     | Credentials AES-GCM encrypted; IDs shown, tokens tail-masked, passwords hidden        |
 | Platform/login-option catalog       | ✅     | `GET /api/platforms` — drives the account-creation form                               |
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
-| Manual publish tracking              | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                   |
+| Manual publish tracking             | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                     |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
 | Post management (drafts, overrides) | ✅     |                                                                                       |
 | Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
@@ -66,12 +66,12 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 **Enums**
 
 ```
-Platform:          FACEBOOK | REDDIT | X | LINKEDIN
-AuthMethod:        PAGE_ACCESS_TOKEN | PASSWORD_GRANT | PROFILE_URL
+Platform:            FACEBOOK | REDDIT | X | LINKEDIN
+AuthMethod:          PAGE_ACCESS_TOKEN | PASSWORD_GRANT | PROFILE_URL
 CredentialFieldKind: ID | TOKEN | PASSWORD
-AccountStatus:     UNVERIFIED | ACTIVE | INVALID
-PostStatus:        DRAFT | PUBLISHED
-PublicationStatus: PENDING | SUCCESS | FAILED
+AccountStatus:       UNVERIFIED | ACTIVE | INVALID
+PostStatus:          DRAFT | PUBLISHED
+PublicationStatus:   PENDING | SUCCESS | FAILED
 ```
 
 `AuthMethod` availability is per platform (see `GET /api/platforms`); only
@@ -214,7 +214,7 @@ last 4); `password` → `PASSWORD` (fully masked). Undeclared fields default to
 Calls the platform ("who am I") and updates the account:
 
 ```json
-{ "account": { ...AccountDto }, "ok": true, "message": "Credentials verified" }
+{ "account": { [AccountDto](#accountdto-all-responses) }, "ok": true, "message": "Credentials verified" }
 ```
 
 Failure → `ok: false`, `account.status: "INVALID"`, `message` carries the upstream
@@ -248,7 +248,7 @@ publication whose message carries the link (see publish below).
 }
 ```
 
-→ `201` PostDto. `content.text` required (`400` if blank). `overrides` maps a
+→ `201` [PostDto](#postdto). `content.text` required (`400` if blank). `overrides` maps a
 platform to **full replacement content** (character limits, per-platform titles);
 at publish time each field falls back individually —
 `override.title ?: content.title`, `override.text ?: content.text`.
@@ -264,7 +264,7 @@ since targets are chosen then.
   "status": "DRAFT",
   "overrides": { "FACEBOOK": { "title": null, "text": "facebook variant" } },
   "createdAt": "...", "updatedAt": "...", "deletedAt": null,
-  "publications": [ ...PublicationDto ]
+  "publications": [ [PublicationDto](#publicationdto) ]
 }
 ```
 
@@ -278,7 +278,9 @@ list responses.
 `overrides` (replaced wholesale; each entry must include text). Non-DRAFT post →
 `400 "Only DRAFT posts can be edited"`.
 
-### DELETE /api/posts/{id}?deletePublications= ✅
+### DELETE /api/posts/{id}?deletePublications=
+
+status: ✅
 
 Soft delete; the post vanishes from all endpoints (`404`, like unknown ids) but its
 `Publication` rows stay queryable as history — publications are never removed.
@@ -300,7 +302,7 @@ Deleted posts reappear only via `GET /api/posts?showDeleted=true` (combinable wi
 { "accountIds": [1, 2] }
 ```
 
-→ `200` — per-target outcomes, one failing target never blocks others:
+→ `200` — per-target outcomes as [PublicationDto](#publicationdto) rows, one failing target never blocks others:
 
 ```json
 {
@@ -325,7 +327,9 @@ Semantics:
 - Accounts whose login option has no API access (`canPublish: false`) fail here —
   use `/publish-manual` below to record posts made by hand.
 
-### POST /api/posts/{id}/publish-manual ✅
+### POST /api/posts/{id}/publish-manual
+
+status: ✅
 
 Records a publication that was made **by hand**: the user opened the platform
 (ideally via the account's `profileUrl`) and posted there themselves. No
@@ -336,7 +340,7 @@ to) `PROFILE_URL` manual accounts.
 { "accountId": 3, "externalUrl": "https://x.com/my_page/status/1234" }
 ```
 
-→ `200`, same shape as `/publish` with a single result row:
+→ `200`, same shape as `/publish` with a single [PublicationDto](#publicationdto) result row:
 
 ```json
 {
@@ -385,7 +389,8 @@ recorded via `publish-manual` (by-hand posts) instead of an adapter attempt.
 
 ---
 
-## Demo feedback (demo-only) ✅
+## Demo feedback (demo-only)
+status: ✅
 
 A simple list of text messages a user can add/delete and check/uncheck. For demos
 only — standalone items, no relations to other entities, no soft delete, hard
@@ -405,7 +410,7 @@ deleted for real.
 `POST` body: `{ "text": "..." }` (required, non-blank). `PATCH` body: any of
 `{ "text": "...", "checked": true }`. Blank text → `400`, unknown id → `404`.
 
-## Operational endpoints ✅
+## Operational endpoints
 
 Spring Boot Actuator endpoints, outside the `/api` prefix and **available without
 authentication**. Only these two actuator endpoints are exposed.
@@ -417,7 +422,9 @@ authentication**. Only these two actuator endpoints are exposed.
 
 ---
 
-# Planned: Engagement tracking ❌
+# Planned: Engagement tracking
+
+status: ❌
 
 Receive updates about engagement (comments, reactions) on published posts.
 
@@ -451,7 +458,9 @@ Automatic polling (config `smagent.engagement.poll-cron`, default off) — ❌ f
 
 ---
 
-# Planned: AI providers ❌
+# Planned: AI providers
+
+status: ❌
 
 Manage credentials for AI backends. Two provider types cover the whole market:
 
@@ -504,7 +513,9 @@ call succeeded (OpenRouter-style providers only). The UI should label estimates.
 
 ---
 
-# Planned: AI generation / chat ❌
+# Planned: AI generation / chat
+
+status: ❌
 
 Generate publication text with a chosen provider/model.
 

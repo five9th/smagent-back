@@ -97,7 +97,7 @@ POST /api/auth/logout
 GET  /api/auth/me
 
 GET    /api/platforms                                          platforms + login options
-GET    /api/social-accounts?showDeleted=                       secrets masked, IDs shown
+GET    /api/social-accounts?showDeleted=                       IDs shown, tokens tail-masked, passwords hidden
 POST   /api/social-accounts        {platform, authMethod, credentials, displayName?}
 GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}   {displayName?, credentials?}
@@ -136,7 +136,7 @@ source of truth: `springBoot { buildInfo() }` bakes it into the jar as
 the top of this README and `docs/API.md` on every build — don't edit them by hand.
 
 Adding a login option = one class implementing `SocialPlatformAdapter`
-(`platform`, `authMethod`, `requiredCredentialFields`, `verify`, `publish`).
+(`platform`, `authMethod`, `credentialFields`, `verify`, `publish`).
 API-backed options live in `platform/adapter/<platform>/`; the manual
 `PROFILE_URL` option is shared — add a one-line `ProfileUrlAdapter` subclass in
 `platform/adapter/common/` so a new platform is usable before it has API

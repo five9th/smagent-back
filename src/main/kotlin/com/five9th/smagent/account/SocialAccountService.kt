@@ -3,6 +3,7 @@ package com.five9th.smagent.account
 import com.five9th.smagent.common.NotFoundException
 import com.five9th.smagent.crypto.CryptoService
 import com.five9th.smagent.domain.AccountStatus
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.SocialAccount
 import com.five9th.smagent.platform.AdapterRegistry
 import com.five9th.smagent.platform.CredentialParser
@@ -93,7 +94,7 @@ class SocialAccountService(
     }
 
     private fun validateCredentials(adapter: SocialPlatformAdapter, credentials: Map<String, String>) {
-        val missing = adapter.requiredCredentialFields.filter {
+        val missing = adapter.credentialFields.keys.filter {
             credentials[it].isNullOrBlank()
         }
         if (missing.isNotEmpty()) {
@@ -115,17 +116,23 @@ class SocialAccountService(
         deletedAt = account.deletedAt,
     )
 
-    /** Mask secrets, not IDs: adapter-declared non-secret fields are shown in full. */
+    /** Mask by field kind: IDs in full, tokens keep their tail, passwords fully hidden. */
     private fun maskCredentials(account: SocialAccount): Map<String, String> =
         if (account.credentialsEnc.isBlank()) {
             emptyMap() // soft-deleted: credentials dropped
         } else {
-            val nonSecret = registry.find(account.platform, account.authMethod)
-                ?.nonSecretCredentialFields ?: emptySet() // unknown login option: mask everything
+            val kinds = registry.find(account.platform, account.authMethod)
+                ?.credentialFields ?: emptyMap() // unknown login option: mask everything
             CredentialParser.parseAll(crypto.decrypt(account.credentialsEnc))
-                .mapValues { (field, value) -> if (field in nonSecret) value else mask(value) }
+                .mapValues { (field, value) -> maskByKind(kinds[field], value) }
         }
 
-    private fun mask(value: String): String =
+    private fun maskByKind(kind: CredentialFieldKind?, value: String): String = when (kind) {
+        CredentialFieldKind.ID -> value
+        CredentialFieldKind.TOKEN -> maskToken(value)
+        null, CredentialFieldKind.PASSWORD -> "••••" // undeclared fields fail closed
+    }
+
+    private fun maskToken(value: String): String =
         if (value.length > 8) "••••" + value.takeLast(4) else "••••"
 }

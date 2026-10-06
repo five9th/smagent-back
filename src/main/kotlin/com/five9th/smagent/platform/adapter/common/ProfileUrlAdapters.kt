@@ -1,6 +1,7 @@
 package com.five9th.smagent.platform.adapter.common
 
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.platform.CredentialParser
 import com.five9th.smagent.platform.PlatformException
@@ -24,8 +25,7 @@ abstract class ProfileUrlAdapter(
 ) : SocialPlatformAdapter {
 
     final override val authMethod = AuthMethod.PROFILE_URL
-    final override val requiredCredentialFields = setOf(PROFILE_URL_FIELD)
-    final override val nonSecretCredentialFields = setOf(PROFILE_URL_FIELD) // the link is the point
+    final override val credentialFields = mapOf(PROFILE_URL_FIELD to CredentialFieldKind.ID) // the link is the point
     final override val canPublish = false
 
     /** No platform API involved — only the URL shape is checked. */

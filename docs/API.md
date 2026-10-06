@@ -21,7 +21,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 |-------------------------------------|--------|---------------------------------------------------------------------------------------|
 | Session auth (login/logout/me)      | ✅     | HttpOnly `SameSite=Lax` cookie                                                        |
 | Owner seeding from env              | ✅     | Fail-fast without `SMAGENT_ADMIN_PASSWORD`                                            |
-| Social account CRUD + verify        | ✅     | Credentials AES-GCM encrypted; secrets masked, IDs shown                             |
+| Social account CRUD + verify        | ✅     | Credentials AES-GCM encrypted; IDs shown, tokens tail-masked, passwords hidden      |
 | Platform/login-option catalog       | ✅     | `GET /api/platforms` — drives the account-creation form                               |
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
@@ -68,13 +68,16 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 ```
 Platform:          FACEBOOK | REDDIT | X | LINKEDIN
 AuthMethod:        PAGE_ACCESS_TOKEN | PASSWORD_GRANT | PROFILE_URL
+CredentialFieldKind: ID | TOKEN | PASSWORD
 AccountStatus:     UNVERIFIED | ACTIVE | INVALID
 PostStatus:        DRAFT | PUBLISHED
 PublicationStatus: PENDING | SUCCESS | FAILED
 ```
 
 `AuthMethod` availability is per platform (see `GET /api/platforms`); only
-`PROFILE_URL` exists on every platform.
+`PROFILE_URL` exists on every platform. `CredentialFieldKind` says how a
+credential field is rendered in `credentialsMasked`: `ID` in full, `TOKEN` as
+`••••` + last 4 characters, `PASSWORD` fully masked.
 
 ---
 
@@ -116,20 +119,19 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 ### GET /api/platforms
 
 Read-only catalog built from the adapter beans — one entry per login option.
-`requiredCredentialFields` are the keys the credential JSON must contain;
-`nonSecretCredentialFields` lists the ones that are identifiers (shown in full
-in `credentialsMasked`, see below) — the rest are secrets.
+`credentialFields` maps each **required** field (the keys) to its
+`CredentialFieldKind`: `ID` (shown in full in `credentialsMasked`), `TOKEN`
+(`••••` + last 4), `PASSWORD` (fully masked). The SPA gets its input types
+from the same map — plain text / tail display / password field.
 
 ```json
 [
   { "platform": "FACEBOOK",
     "loginOptions": [
       { "authMethod": "PAGE_ACCESS_TOKEN", "canPublish": true,
-        "requiredCredentialFields": ["pageId", "pageAccessToken"],
-        "nonSecretCredentialFields": ["pageId"] },
+        "credentialFields": { "pageId": "ID", "pageAccessToken": "TOKEN" } },
       { "authMethod": "PROFILE_URL", "canPublish": false,
-        "requiredCredentialFields": ["profileUrl"],
-        "nonSecretCredentialFields": ["profileUrl"] }
+        "credentialFields": { "profileUrl": "ID" } }
     ] },
   { "platform": "REDDIT", "loginOptions": [ "... PASSWORD_GRANT ...", "... PROFILE_URL ..." ] },
   { "platform": "X", "loginOptions": [ { "authMethod": "PROFILE_URL", "canPublish": false, "..." : "..." } ] },
@@ -169,10 +171,11 @@ using them exist as manual links only and cannot be publish targets.
 }
 ```
 
-Masking is "mask secrets, not IDs": fields the login option declares
-non-secret (per `GET /api/platforms`) — page IDs, usernames, subreddits,
-profile URLs — are returned in full; every other field, including anything
-unknown, is reduced to `••••` + last 4 characters. Updating credentials
+Masking is per-field kind, declared by the login option (see
+`GET /api/platforms`): `ID` fields (page IDs, usernames, subreddits, profile
+URLs) are returned in full; `TOKEN` fields (`pageAccessToken`, `clientSecret`)
+are reduced to `••••` + last 4 characters; `PASSWORD` fields (`password`) and
+anything undeclared are plain `••••`. Updating credentials
 resets `status` to `UNVERIFIED`; `authMethod` may be switched in the same PUT
 (new credentials required — switching alone → `400`).
 
@@ -201,9 +204,10 @@ Missing required credential fields → `400` listing them.
 | `REDDIT`   | `PASSWORD_GRANT`    | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
 | any        | `PROFILE_URL`       | `profileUrl`                                                    | Manual only: no API access; account is a link to open and post by hand.            |
 
-Non-secret (shown in full in `credentialsMasked`): `pageId`; Reddit's
-`clientId`, `username`, `subreddit`; `profileUrl`. Everything else —
-`pageAccessToken`, `clientSecret`, `password` — is masked.
+Field kinds: `pageId`, Reddit's `clientId`/`username`/`subreddit`, `profileUrl`
+→ `ID` (shown in full); `pageAccessToken`, `clientSecret` → `TOKEN` (`••••` +
+last 4); `password` → `PASSWORD` (fully masked). Undeclared fields default to
+`PASSWORD` — secrets fail closed.
 
 ### POST /api/social-accounts/{id}/verify
 

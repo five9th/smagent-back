@@ -2,6 +2,7 @@ package com.five9th.smagent.platform.adapter.reddit
 
 import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.platform.CredentialParser
 import com.five9th.smagent.platform.PlatformException
@@ -39,9 +40,13 @@ class RedditPasswordGrantAdapter(
 
     override val platform = Platform.REDDIT
     override val authMethod = AuthMethod.PASSWORD_GRANT
-    override val requiredCredentialFields =
-        setOf("clientId", "clientSecret", "username", "password", "subreddit")
-    override val nonSecretCredentialFields = setOf("clientId", "username", "subreddit")
+    override val credentialFields = mapOf(
+        "clientId" to CredentialFieldKind.ID,
+        "clientSecret" to CredentialFieldKind.TOKEN,
+        "username" to CredentialFieldKind.ID,
+        "password" to CredentialFieldKind.PASSWORD,
+        "subreddit" to CredentialFieldKind.ID,
+    )
     override val canPublish = true
 
     private val apiClient = restClientBuilder.baseUrl(props.reddit.baseUrl).build()
@@ -53,7 +58,7 @@ class RedditPasswordGrantAdapter(
     private val tokenCache = ConcurrentHashMap<String, CachedToken>()
 
     override fun verify(credentialsJson: String): VerifyResult {
-        val creds = CredentialParser.parse(credentialsJson, *requiredCredentialFields.toTypedArray())
+        val creds = CredentialParser.parse(credentialsJson, *credentialFields.keys.toTypedArray())
         val token = accessToken(creds)
         val ua = userAgent(creds.getValue("username"))
         val body = parse {
@@ -72,7 +77,7 @@ class RedditPasswordGrantAdapter(
     }
 
     override fun publish(credentialsJson: String, command: PublishCommand): PublishResult {
-        val creds = CredentialParser.parse(credentialsJson, *requiredCredentialFields.toTypedArray())
+        val creds = CredentialParser.parse(credentialsJson, *credentialFields.keys.toTypedArray())
         val title = command.title?.trim()?.takeIf { it.isNotEmpty() }
             ?: throw PlatformException("Reddit posts require a non-empty title")
 

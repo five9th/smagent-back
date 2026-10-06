@@ -18,6 +18,13 @@ enum class AuthMethod {
     PROFILE_URL,
 }
 
+/**
+ * How a credential field is rendered in `credentialsMasked`: ID in full,
+ * TOKEN keeps its last 4 characters, PASSWORD is fully masked. Undeclared
+ * fields are treated as PASSWORD — secrets fail closed.
+ */
+enum class CredentialFieldKind { ID, TOKEN, PASSWORD }
+
 enum class Role { OWNER }
 
 /** Lifecycle of a post. Scheduling may add SCHEDULED later. */

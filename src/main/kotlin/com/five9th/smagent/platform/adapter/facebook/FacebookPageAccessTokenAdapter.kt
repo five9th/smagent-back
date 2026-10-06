@@ -2,6 +2,7 @@ package com.five9th.smagent.platform.adapter.facebook
 
 import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.platform.CredentialParser
 import com.five9th.smagent.platform.PlatformException
@@ -32,8 +33,10 @@ class FacebookPageAccessTokenAdapter(
 
     override val platform = Platform.FACEBOOK
     override val authMethod = AuthMethod.PAGE_ACCESS_TOKEN
-    override val requiredCredentialFields = setOf("pageId", "pageAccessToken")
-    override val nonSecretCredentialFields = setOf("pageId")
+    override val credentialFields = mapOf(
+        "pageId" to CredentialFieldKind.ID,
+        "pageAccessToken" to CredentialFieldKind.TOKEN,
+    )
     override val canPublish = true
 
     private val graphVersion = props.facebook.graphApiVersion
@@ -41,7 +44,7 @@ class FacebookPageAccessTokenAdapter(
     private val mapper = JsonMapper.builder().build()
 
     override fun verify(credentialsJson: String): VerifyResult {
-        val creds = CredentialParser.parse(credentialsJson, *requiredCredentialFields.toTypedArray())
+        val creds = CredentialParser.parse(credentialsJson, *credentialFields.keys.toTypedArray())
         val token = creds.getValue("pageAccessToken")
         val body = call {
             client.get()
@@ -60,7 +63,7 @@ class FacebookPageAccessTokenAdapter(
     }
 
     override fun publish(credentialsJson: String, command: PublishCommand): PublishResult {
-        val creds = CredentialParser.parse(credentialsJson, *requiredCredentialFields.toTypedArray())
+        val creds = CredentialParser.parse(credentialsJson, *credentialFields.keys.toTypedArray())
         val pageId = creds.getValue("pageId")
 
         val form = LinkedMultiValueMap<String, String>()

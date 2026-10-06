@@ -1,6 +1,7 @@
 package com.five9th.smagent
 
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.platform.PublishResult
 import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdapter
@@ -36,8 +37,9 @@ class SoftDeleteIntegrationTest(@Autowired val mvc: MockMvc) {
     fun stubAdapter() {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
         whenever(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
-        whenever(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
-        whenever(facebookPageTokenAdapter.nonSecretCredentialFields).thenReturn(setOf("pageId"))
+        whenever(facebookPageTokenAdapter.credentialFields).thenReturn(
+            mapOf("pageId" to CredentialFieldKind.ID, "pageAccessToken" to CredentialFieldKind.TOKEN)
+        )
         whenever(facebookPageTokenAdapter.publish(any(), any()))
             .thenReturn(PublishResult("https://facebook.com/1/posts/abc"))
     }

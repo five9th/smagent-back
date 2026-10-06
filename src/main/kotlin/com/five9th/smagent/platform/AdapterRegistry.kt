@@ -32,7 +32,6 @@ class AdapterRegistry(private val adapters: List<SocialPlatformAdapter>) {
     private fun SocialPlatformAdapter.toLoginOptionDto() = LoginOptionDto(
         authMethod = authMethod,
         canPublish = canPublish,
-        requiredCredentialFields = requiredCredentialFields,
-        nonSecretCredentialFields = nonSecretCredentialFields,
+        credentialFields = credentialFields,
     )
 }

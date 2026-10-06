@@ -1,6 +1,7 @@
 package com.five9th.smagent.account
 
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.platform.VerifyResult
 import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdapter
@@ -33,8 +34,9 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
     fun stubAdapter() {
         `when`(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
         `when`(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
-        `when`(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
-        `when`(facebookPageTokenAdapter.nonSecretCredentialFields).thenReturn(setOf("pageId"))
+        `when`(facebookPageTokenAdapter.credentialFields).thenReturn(
+            mapOf("pageId" to CredentialFieldKind.ID, "pageAccessToken" to CredentialFieldKind.TOKEN)
+        )
         `when`(facebookPageTokenAdapter.canPublish).thenReturn(true)
         `when`(facebookPageTokenAdapter.verify(anyString())).thenReturn(VerifyResult("Fake Page"))
     }
@@ -112,6 +114,28 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.status") { value("UNVERIFIED") }
             jsonPath("$.displayName") { value("My X page") }
             jsonPath("$.credentialsMasked.profileUrl") { value("https://x.com/my_page") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `credential kinds drive masking - IDs full, tokens tailed, passwords hidden`() {
+        mvc.post("/api/social-accounts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {"platform":"REDDIT","authMethod":"PASSWORD_GRANT",
+                 "credentials":{"clientId":"fake-client-id","clientSecret":"abcdef123456789",
+                                "username":"fake-user","password":"supersecret","subreddit":"test",
+                                "extraUndeclaredField":"whatever"}}
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.credentialsMasked.clientId") { value("fake-client-id") }
+            jsonPath("$.credentialsMasked.clientSecret") { value("••••6789") }
+            jsonPath("$.credentialsMasked.username") { value("fake-user") }
+            jsonPath("$.credentialsMasked.password") { value("••••") }
+            jsonPath("$.credentialsMasked.subreddit") { value("test") }
+            jsonPath("$.credentialsMasked.extraUndeclaredField") { value("••••") }
         }
     }
 

@@ -1,6 +1,7 @@
 package com.five9th.smagent.platform
 
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 
 /**
@@ -16,15 +17,13 @@ interface SocialPlatformAdapter {
     /** Which login option of [platform] this adapter implements. */
     val authMethod: AuthMethod
 
-    /** Fields that must be present in the credential JSON (validated on create/update). */
-    val requiredCredentialFields: Set<String>
-
     /**
-     * Credential fields that identify the target rather than authenticate it
-     * (page IDs, usernames, URLs) — shown in full in `credentialsMasked`.
-     * Everything else, including unknown fields, is masked: secrets fail closed.
+     * Credential fields this login option requires (validated on create/update),
+     * mapped to how each is rendered in `credentialsMasked`: ID in full, TOKEN
+     * keeps its last 4 characters, PASSWORD is fully masked. Undeclared fields
+     * default to PASSWORD — secrets fail closed.
      */
-    val nonSecretCredentialFields: Set<String>
+    val credentialFields: Map<String, CredentialFieldKind>
 
     /** False when the login option gives no platform API access (PROFILE_URL). */
     val canPublish: Boolean

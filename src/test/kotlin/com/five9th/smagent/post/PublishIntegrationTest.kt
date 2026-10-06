@@ -1,6 +1,7 @@
 package com.five9th.smagent.post
 
 import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.PublishCommand
@@ -43,15 +44,21 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
     fun stubAdapters() {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
         whenever(facebookPageTokenAdapter.authMethod).thenReturn(AuthMethod.PAGE_ACCESS_TOKEN)
-        whenever(facebookPageTokenAdapter.requiredCredentialFields).thenReturn(setOf("pageId", "pageAccessToken"))
-        whenever(facebookPageTokenAdapter.nonSecretCredentialFields).thenReturn(setOf("pageId"))
+        whenever(facebookPageTokenAdapter.credentialFields).thenReturn(
+            mapOf("pageId" to CredentialFieldKind.ID, "pageAccessToken" to CredentialFieldKind.TOKEN)
+        )
         whenever(facebookPageTokenAdapter.canPublish).thenReturn(true)
         whenever(redditPasswordAdapter.platform).thenReturn(Platform.REDDIT)
         whenever(redditPasswordAdapter.authMethod).thenReturn(AuthMethod.PASSWORD_GRANT)
-        whenever(redditPasswordAdapter.requiredCredentialFields)
-            .thenReturn(setOf("clientId", "clientSecret", "username", "password", "subreddit"))
-        whenever(redditPasswordAdapter.nonSecretCredentialFields)
-            .thenReturn(setOf("clientId", "username", "subreddit"))
+        whenever(redditPasswordAdapter.credentialFields).thenReturn(
+            mapOf(
+                "clientId" to CredentialFieldKind.ID,
+                "clientSecret" to CredentialFieldKind.TOKEN,
+                "username" to CredentialFieldKind.ID,
+                "password" to CredentialFieldKind.PASSWORD,
+                "subreddit" to CredentialFieldKind.ID,
+            )
+        )
         whenever(redditPasswordAdapter.canPublish).thenReturn(true)
     }
 

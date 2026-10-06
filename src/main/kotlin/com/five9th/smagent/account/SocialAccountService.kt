@@ -104,17 +104,21 @@ class SocialAccountService(
         }
     }
 
-    private fun toDto(account: SocialAccount): AccountDto = AccountDto(
-        id = account.id,
-        platform = account.platform,
-        authMethod = account.authMethod,
-        displayName = account.displayName,
-        status = account.status,
-        canPublish = registry.find(account.platform, account.authMethod)?.canPublish ?: false,
-        credentialsMasked = maskCredentials(account),
-        createdAt = account.createdAt,
-        deletedAt = account.deletedAt,
-    )
+    private fun toDto(account: SocialAccount): AccountDto {
+        val adapter = registry.find(account.platform, account.authMethod)
+        return AccountDto(
+            id = account.id,
+            platform = account.platform,
+            authMethod = account.authMethod,
+            displayName = account.displayName,
+            status = account.status,
+            canPublish = adapter?.canPublish ?: false,
+            canShare = adapter?.canShare ?: false,
+            credentialsMasked = maskCredentials(account),
+            createdAt = account.createdAt,
+            deletedAt = account.deletedAt,
+        )
+    }
 
     /** Mask by field kind: IDs in full, tokens keep their tail, passwords fully hidden. */
     private fun maskCredentials(account: SocialAccount): Map<String, String> =

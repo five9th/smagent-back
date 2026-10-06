@@ -52,6 +52,10 @@ class PostController(
     @PostMapping("/{id}/publish-manual")
     fun publishManual(@PathVariable id: Long, @Valid @RequestBody request: ManualPublishRequest): PublishResponse =
         publishService.publishManually(id, request)
+
+    @GetMapping("/{id}/share-url")
+    fun shareUrl(@PathVariable id: Long, @RequestParam accountId: Long): ShareUrlResponse =
+        publishService.shareUrl(id, accountId)
 }
 
 @RestController

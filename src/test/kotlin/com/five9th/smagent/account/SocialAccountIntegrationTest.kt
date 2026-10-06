@@ -73,6 +73,7 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.authMethod") { value("PAGE_ACCESS_TOKEN") }
             jsonPath("$.status") { value("UNVERIFIED") }
             jsonPath("$.canPublish") { value(true) }
+            jsonPath("$.canShare") { value(false) }
             jsonPath("$.displayName") { value("FACEBOOK account") }
             jsonPath("$.credentialsMasked.pageId") { value("123456789") }
             jsonPath("$.credentialsMasked.pageAccessToken") { value("••••1234") }
@@ -111,9 +112,32 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.platform") { value("X") }
             jsonPath("$.authMethod") { value("PROFILE_URL") }
             jsonPath("$.canPublish") { value(false) }
+            jsonPath("$.canShare") { value(true) }
             jsonPath("$.status") { value("UNVERIFIED") }
             jsonPath("$.displayName") { value("My X page") }
             jsonPath("$.credentialsMasked.profileUrl") { value("https://x.com/my_page") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `reddit PROFILE_URL account requires a subreddit`() {
+        mvc.post("/api/social-accounts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"platform":"REDDIT","authMethod":"PROFILE_URL","credentials":{"profileUrl":"https://reddit.com/r/test"}}"""
+        }.andExpect { status { isBadRequest() } }
+
+        mvc.post("/api/social-accounts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {"platform":"REDDIT","authMethod":"PROFILE_URL","displayName":"r/test",
+                 "credentials":{"profileUrl":"https://reddit.com/r/test","subreddit":"r/test"}}
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.canShare") { value(true) }
+            jsonPath("$.credentialsMasked.profileUrl") { value("https://reddit.com/r/test") }
+            jsonPath("$.credentialsMasked.subreddit") { value("r/test") }
         }
     }
 

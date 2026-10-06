@@ -130,6 +130,13 @@ def test_suit_1(api: SmagentApi):
     s, bad = api.publish_manual(mpost_id, x_id, "not a url")
     check("publish-manual with bad URL -> 400", s == 400, f"got {s} {bad}")
 
+    s, su = api.share_url(mpost_id, x_id)
+    check("share-url -> 200 intent URL", s == 200 and isinstance(su, dict)
+          and su.get("url", "").startswith("https://x.com/intent/tweet?text="), f"got {s} {su}")
+
+    s, bad = api.create_account("REDDIT", "PROFILE_URL", {"profileUrl": "https://reddit.com/r/test"})
+    check("reddit PROFILE_URL without subreddit -> 400", s == 400, f"got {s} {bad}")
+
     s, _ = api.delete_post(mpost_id, delete_publications=False)
     check("delete manually-published post -> 204", s == 204, f"got {s}")
     api.delete_account(x_id)

@@ -30,12 +30,15 @@ class PlatformIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$[0].loginOptions.length()") { value(2) }
             jsonPath("$[0].loginOptions[0].authMethod") { value("PAGE_ACCESS_TOKEN") }
             jsonPath("$[0].loginOptions[0].canPublish") { value(true) }
+            jsonPath("$[0].loginOptions[0].canShare") { value(false) }
             jsonPath("$[0].loginOptions[0].credentialFields.pageId") { value("ID") }
             jsonPath("$[0].loginOptions[0].credentialFields.pageAccessToken") { value("TOKEN") }
             jsonPath("$[0].loginOptions[1].authMethod") { value("PROFILE_URL") }
             jsonPath("$[0].loginOptions[1].canPublish") { value(false) }
+            jsonPath("$[0].loginOptions[1].canShare") { value(true) }
             jsonPath("$[1].platform") { value("REDDIT") }
             jsonPath("$[1].loginOptions.length()") { value(2) }
+            jsonPath("$[1].loginOptions[1].credentialFields.subreddit") { value("ID") }
             jsonPath("$[2].platform") { value("X") }
             jsonPath("$[2].loginOptions.length()") { value(1) }
             jsonPath("$[2].loginOptions[0].authMethod") { value("PROFILE_URL") }

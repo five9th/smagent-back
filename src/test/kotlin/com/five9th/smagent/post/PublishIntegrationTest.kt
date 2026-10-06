@@ -70,11 +70,12 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
         return Regex("\"id\":(\\d+)").find(result.response.contentAsString)!!.groupValues[1].toLong()
     }
 
-    private fun createPost(title: String?, text: String, overrides: String? = null): Long {
-        val contentJson = if (title != null) {
-            """{"title":"$title","text":"$text"}"""
-        } else {
-            """{"text":"$text"}"""
+    private fun createPost(title: String?, text: String, overrides: String? = null, link: String? = null): Long {
+        val contentJson = buildString {
+            append("{")
+            if (title != null) append(""""title":"$title",""")
+            if (link != null) append(""""link":"$link",""")
+            append(""""text":"$text"}""")
         }
         val body = buildString {
             append("""{"content":$contentJson""")
@@ -230,8 +231,9 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             status { isOk() }
             jsonPath("$.postStatus") { value("DRAFT") }
             jsonPath("$.results[0].status") { value("FAILED") }
+            // the composer URL beats the bare profile link in the message
             jsonPath("$.results[0].errorMessage") {
-                value(org.hamcrest.Matchers.containsString("https://x.com/my_page"))
+                value(org.hamcrest.Matchers.containsString("https://x.com/intent/tweet"))
             }
         }
 
@@ -330,6 +332,96 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             contentType = MediaType.APPLICATION_JSON
             content = """{"accountId":999}"""
         }.andExpect { status { isNotFound() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `share-url composes the platform composer with effective content`() {
+        val xAccount = createAccount("X", "PROFILE_URL", "\"profileUrl\":\"https://x.com/my_page\"")
+        val postId = createPost(
+            title = "Ignored by X",
+            text = "generic body",
+            link = "https://example.com/a",
+            overrides = """{"X":{"title":"x title","text":"x body"}}""",
+        )
+
+        mvc.get("/api/posts/{id}/share-url", postId) {
+            param("accountId", xAccount.toString())
+        }.andExpect {
+            status { isOk() }
+            // override text wins, link falls back to the post's own; title ignored
+            jsonPath("$.url") {
+                value("https://x.com/intent/tweet?text=x%20body&url=https%3A%2F%2Fexample.com%2Fa")
+            }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `share-url targets the account's subreddit and omits missing pieces`() {
+        val rdAccount = createAccount(
+            "REDDIT", "PROFILE_URL",
+            "\"profileUrl\":\"https://reddit.com/u/me\",\"subreddit\":\"r/testsub\""
+        )
+        val postId = createPost("T", "body") // no link -> url param omitted
+
+        mvc.get("/api/posts/{id}/share-url", postId) {
+            param("accountId", rdAccount.toString())
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.url") { value("https://www.reddit.com/r/testsub/submit?title=T") } // r/ stripped
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `share-url opens the composer even without a link`() {
+        val fbAccount = createAccount("FACEBOOK", "PROFILE_URL", "\"profileUrl\":\"https://facebook.com/my_page\"")
+        val postId = createPost(null, "hello")
+
+        mvc.get("/api/posts/{id}/share-url", postId) {
+            param("accountId", fbAccount.toString())
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.url") { value("https://www.facebook.com/sharer/sharer.php") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `share-url for an API account returns 400 and unknown ids 404`() {
+        val fbApi = createAccount("FACEBOOK", "PAGE_ACCESS_TOKEN", "\"pageId\":\"1\",\"pageAccessToken\":\"tok\"")
+        val postId = createPost("t", "text")
+
+        mvc.get("/api/posts/{id}/share-url", postId) {
+            param("accountId", fbApi.toString())
+        }.andExpect { status { isBadRequest() } }
+
+        mvc.get("/api/posts/{id}/share-url", postId) {
+            param("accountId", "999")
+        }.andExpect { status { isNotFound() } }
+
+        mvc.get("/api/posts/{id}/share-url", 999) {
+            param("accountId", fbApi.toString())
+        }.andExpect { status { isNotFound() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `post with malformed link returns 400`() {
+        mvc.post("/api/posts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"content":{"text":"body","link":"not a url"}}"""
+        }.andExpect { status { isBadRequest() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `override with malformed link returns 400`() {
+        mvc.post("/api/posts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"content":{"text":"body"},"overrides":{"LINKEDIN":{"text":"x","link":"nope"}}}"""
+        }.andExpect { status { isBadRequest() } }
     }
 
     @WithMockUser(roles = ["OWNER"])

@@ -36,6 +36,8 @@ data class PostDto(
     data class PostContentDto(
         val title: String?,
         @field:NotBlank val text: String,
+        /** Optional http(s) link the post shares. */
+        val link: String? = null,
     )
 }
 
@@ -77,4 +79,9 @@ data class PublishResponse(
     val postId: Long?,
     val postStatus: PostStatus,
     val results: List<PublishOutcome>,
+)
+
+/** GET /api/posts/{id}/share-url — the prefilled composer URL for a manual account. */
+data class ShareUrlResponse(
+    val url: String,
 )

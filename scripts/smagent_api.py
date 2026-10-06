@@ -134,8 +134,8 @@ class SmagentApi:
         return self._client.request("POST", f"/api/social-accounts/{account_id}/verify")
 
     # --- posts ---
-    def create_post(self, text=UNSET, title=UNSET, overrides: dict | None = None):
-        body: dict = {"content": self._content_dict(title, text)}
+    def create_post(self, text=UNSET, title=UNSET, link=UNSET, overrides: dict | None = None):
+        body: dict = {"content": self._content_dict(title, text, link)}
         if overrides is not None:
             body["overrides"] = self._overrides_dict(overrides)
         return self._client.request("POST", "/api/posts", body)
@@ -149,11 +149,11 @@ class SmagentApi:
     def get_post(self, post_id):
         return self._client.request("GET", f"/api/posts/{post_id}")
 
-    def update_post(self, post_id, title=UNSET, text=UNSET, overrides: dict | None = None):
+    def update_post(self, post_id, title=UNSET, text=UNSET, link=UNSET, overrides: dict | None = None):
         body: dict = {}
-        content = self._content_dict(title, text)
+        content = self._content_dict(title, text, link)
         if content:
-            body["content"] = content  # note: title=None here means JSON null -> clears the title
+            body["content"] = content  # note: title/link=None here means JSON null -> clears them
         if overrides is not None:
             body["overrides"] = self._overrides_dict(overrides)
         return self._client.request("PUT", f"/api/posts/{post_id}", body)
@@ -176,17 +176,22 @@ class SmagentApi:
             body["externalUrl"] = external_url
         return self._client.request("POST", f"/api/posts/{post_id}/publish-manual", body)
 
+    def share_url(self, post_id, account_id):
+        return self._client.request("GET", f"/api/posts/{post_id}/share-url?accountId={account_id}")
+
     def publications(self, post_id):
         return self._client.request("GET", f"/api/publications?postId={post_id}")
 
     # --- helpers ---
     @staticmethod
-    def _content_dict(title, text) -> dict:
+    def _content_dict(title, text, link=UNSET) -> dict:
         content: dict = {}
         if title is not UNSET:
             content["title"] = title
         if text is not UNSET:
             content["text"] = text
+        if link is not UNSET:
+            content["link"] = link
         return content
 
     @staticmethod

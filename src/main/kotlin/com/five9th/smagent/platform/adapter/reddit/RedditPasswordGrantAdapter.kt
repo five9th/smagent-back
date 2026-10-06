@@ -20,6 +20,10 @@ import tools.jackson.databind.json.JsonMapper
 import java.time.Instant
 import java.util.concurrent.ConcurrentHashMap
 
+/** Strips an optional "r/" prefix; shared by both Reddit adapters. */
+internal fun normalizeSubreddit(name: String): String =
+    name.trim().removePrefix("r/").removePrefix("/r/")
+
 /**
  * !!! Reddit API was closed !!!
  * The usage of the Reddit's API implemented here is no longer
@@ -170,8 +174,6 @@ class RedditPasswordGrantAdapter(
     }
 
     private fun userAgent(username: String) = "linux:smagent:v$APP_VERSION (by /u/$username)"
-
-    private fun normalizeSubreddit(name: String): String = name.trim().removePrefix("r/").removePrefix("/r/")
 
     private fun JsonNode.asStringOrNull(): String? =
         if (isNull || isMissingNode) null else asString()

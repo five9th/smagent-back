@@ -13,6 +13,8 @@ data class PlatformDto(
 data class LoginOptionDto(
     val authMethod: AuthMethod,
     val canPublish: Boolean,
+    /** True when GET /api/posts/{id}/share-url can compose a prefilled composer URL. */
+    val canShare: Boolean,
     /** Required credential fields (the keys) and how each is rendered when masked (the values). */
     val credentialFields: Map<String, CredentialFieldKind>,
 )

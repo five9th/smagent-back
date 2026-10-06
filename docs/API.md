@@ -26,6 +26,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | Manual publish tracking             | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                     |
+| Share/composer URLs                 | ✅     | `GET /api/posts/{id}/share-url` — prefilled composer for manual accounts              |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
 | Post management (drafts, overrides) | ✅     |                                                                                       |
 | Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
@@ -122,15 +123,16 @@ Read-only catalog built from the adapter beans — one entry per login option.
 `credentialFields` maps each **required** field (the keys) to its
 `CredentialFieldKind`: `ID` (shown in full in `credentialsMasked`), `TOKEN`
 (`••••` + last 4), `PASSWORD` (fully masked). The SPA gets its input types
-from the same map — plain text / tail display / password field.
+from the same map — plain text / tail display / password field. `canShare`
+marks options that can compose a prefilled composer URL (`GET /api/posts/{id}/share-url`).
 
 ```json
 [
   { "platform": "FACEBOOK",
     "loginOptions": [
-      { "authMethod": "PAGE_ACCESS_TOKEN", "canPublish": true,
+      { "authMethod": "PAGE_ACCESS_TOKEN", "canPublish": true, "canShare": false,
         "credentialFields": { "pageId": "ID", "pageAccessToken": "TOKEN" } },
-      { "authMethod": "PROFILE_URL", "canPublish": false,
+      { "authMethod": "PROFILE_URL", "canPublish": false, "canShare": true,
         "credentialFields": { "profileUrl": "ID" } }
     ] },
   { "platform": "REDDIT", "loginOptions": [ "... PASSWORD_GRANT ...", "... PROFILE_URL ..." ] },
@@ -165,6 +167,7 @@ using them exist as manual links only and cannot be publish targets.
   "displayName": "My Page",
   "status": "ACTIVE",
   "canPublish": true,
+  "canShare": false,
   "credentialsMasked": { "pageId": "123456789012345", "pageAccessToken": "••••1234" },
   "createdAt": "2026-09-22T15:24:58.902685Z",
   "deletedAt": null
@@ -202,7 +205,8 @@ Missing required credential fields → `400` listing them.
 |------------|---------------------|-----------------------------------------------------------------|------------------------------------------------------------------------------------|
 | `FACEBOOK` | `PAGE_ACCESS_TOKEN` | `pageId`, `pageAccessToken`                                     | Long-lived Page token (README has the walkthrough). Verify → page name.            |
 | `REDDIT`   | `PASSWORD_GRANT`    | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
-| any        | `PROFILE_URL`       | `profileUrl`                                                    | Manual only: no API access; account is a link to open and post by hand.            |
+| `REDDIT`   | `PROFILE_URL`       | `profileUrl`, `subreddit`                                        | Manual; share URL opens `r/<subreddit>/submit` prefilled.            |
+| other      | `PROFILE_URL`       | `profileUrl`                                                     | Manual; share URL opens the platform composer (link prefilled where supported). |
 
 Field kinds: `pageId`, Reddit's `clientId`/`username`/`subreddit`, `profileUrl`
 → `ID` (shown in full); `pageAccessToken`, `clientSecret` → `TOKEN` (`••••` +
@@ -238,20 +242,25 @@ publication whose message carries the link (see publish below).
 | DELETE | `/api/posts/{id}?deletePublications=`                  | Soft delete                    | ✅     |
 | POST   | `/api/posts/{id}/publish`                              | Publish to selected accounts   | ✅     |
 | POST   | `/api/posts/{id}/publish-manual`                       | Record a by-hand publication   | ✅     |
+| GET    | `/api/posts/{id}/share-url?accountId=`                 | Composer URL for a manual account | ✅  |
 
 ### POST /api/posts
 
 ```json
 {
-  "content": { "title": "Optional — Reddit needs it", "text": "generic body" },
+  "content": { "title": "Optional — Reddit needs it", "text": "generic body",
+               "link": "https://example.com/my-post" },
   "overrides": { "FACEBOOK": { "title": null, "text": "facebook-specific variant" } }
 }
 ```
 
-→ `201` [PostDto](#postdto). `content.text` required (`400` if blank). `overrides` maps a
+→ `201` [PostDto](#postdto). `content.text` required (`400` if blank); `link` is
+an optional http(s) URL the post shares (`400` if malformed) — used by the
+share URLs of manual accounts. `overrides` maps a
 platform to **full replacement content** (character limits, per-platform titles);
 at publish time each field falls back individually —
-`override.title ?: content.title`, `override.text ?: content.text`.
+`override.title ?: content.title`, `override.text ?: content.text`,
+`override.link ?: content.link`.
 Reddit validation of a missing title happens at publish time (per-target error),
 since targets are chosen then.
 
@@ -260,7 +269,7 @@ since targets are chosen then.
 ```json
 {
   "id": 1,
-  "content": { "title": null, "text": "generic body" },
+  "content": { "title": null, "text": "generic body", "link": null },
   "status": "DRAFT",
   "overrides": { "FACEBOOK": { "title": null, "text": "facebook variant" } },
   "createdAt": "...", "updatedAt": "...", "deletedAt": null,
@@ -274,7 +283,7 @@ list responses.
 
 ### PUT /api/posts/{id}
 
-`content` (replaces title+text together; a null title clears it) and/or
+`content` (replaces title+text+link together; a null title/link clears them) and/or
 `overrides` (replaced wholesale; each entry must include text). Non-DRAFT post →
 `400 "Only DRAFT posts can be edited"`.
 
@@ -325,7 +334,8 @@ Semantics:
 - Republishing an already-published post is allowed (adds rows — natural retry).
 - Unknown `accountId` → `404` for the whole request.
 - Accounts whose login option has no API access (`canPublish: false`) fail here —
-  use `/publish-manual` below to record posts made by hand.
+  open a prefilled composer via `/share-url` below and record the result with
+  `/publish-manual`.
 
 ### POST /api/posts/{id}/publish-manual
 
@@ -362,6 +372,34 @@ Semantics:
 - Repeatable without dedup — log a second share, or fix a wrong URL by recording again.
 - `externalUrl`, when present, must be a well-formed http(s) URL → else `400`.
 - Unknown or soft-deleted post / account → `404`.
+
+### GET /api/posts/{id}/share-url?accountId= ✅
+
+Builds the platform's composer/share URL for a **manual** (`PROFILE_URL`)
+account, prefilled with the post's effective content — per-platform overrides
+apply field-by-field, exactly like `/publish`. The SPA opens it in a new tab;
+once the user has posted by hand, the result is recorded with
+`/publish-manual`.
+
+```
+GET /api/posts/1/share-url?accountId=3
+→ 200 { "url": "https://x.com/intent/tweet?text=hello%20world&url=https%3A%2F%2Fexample.com" }
+```
+
+Per platform (missing pieces are simply omitted — every platform still opens
+its composer):
+
+| Platform   | URL template                                                            | Prefilled                         |
+|------------|-------------------------------------------------------------------------|-----------------------------------|
+| `X`        | `x.com/intent/tweet?text=&url=`                                         | text, link                        |
+| `FACEBOOK` | `facebook.com/sharer/sharer.php?u=`                                     | link                              |
+| `REDDIT`   | `reddit.com/r/<subreddit>/submit?url=&title=`                            | title, link (subreddit from creds)|
+| `LINKEDIN` | `linkedin.com/sharing/share-offsite/?url=`                              | link                              |
+
+Errors: unknown/soft-deleted post or account → `404`; account's login option
+cannot compose a URL (API-backed options) → `400`.
+
+`canShare` on the account / login option tells the SPA when to offer this.
 
 ---
 

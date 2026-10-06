@@ -1,7 +1,9 @@
 package com.five9th.smagent.post
 
 import com.five9th.smagent.common.NotFoundException
+import com.five9th.smagent.common.Urls
 import com.five9th.smagent.crypto.CryptoService
+import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.domain.Post
 import com.five9th.smagent.domain.Publication
 import com.five9th.smagent.domain.PublicationStatus
@@ -13,7 +15,6 @@ import com.five9th.smagent.repo.PublicationRepository
 import com.five9th.smagent.repo.SocialAccountRepository
 import org.slf4j.LoggerFactory
 import org.springframework.stereotype.Service
-import java.net.URI
 import java.time.Instant
 
 /**
@@ -71,16 +72,8 @@ class PublishService(
             return fail(publication, account, "No adapter for ${account.platform}/${account.authMethod}")
         }
 
-        // The per-platform override wins field-by-field; missing fields fall back
-        // to the post's own content (so e.g. a text-only override keeps the title).
-        val override = post.overrides[account.platform]
-        val command = PublishCommand(
-            title = override?.title ?: post.content.title,
-            text = override?.text ?: post.content.text,
-        )
-
         return try {
-            val result = adapter.publish(crypto.decrypt(account.credentialsEnc), command)
+            val result = adapter.publish(crypto.decrypt(account.credentialsEnc), effectiveCommand(post, account.platform))
             publication.status = PublicationStatus.SUCCESS
             publication.externalUrl = result.externalUrl
             publication.publishedAt = Instant.now()
@@ -123,7 +116,7 @@ class PublishService(
         val post = postService.get(postId)
         val account = accounts.findByIdAndDeletedAtIsNull(request.accountId)
             ?: throw NotFoundException("Social account ${request.accountId} not found")
-        val externalUrl = request.externalUrl?.let { requireHttpUrl(it) }
+        val externalUrl = request.externalUrl?.let { Urls.requireHttpUrl(it, "externalUrl") }
 
         val publication = publications.save(
             Publication(
@@ -155,20 +148,33 @@ class PublishService(
         )
     }
 
-    private fun requireHttpUrl(url: String): String {
-        val uri = try {
-            URI(url)
-        } catch (e: Exception) {
-            throw IllegalArgumentException("externalUrl is not a valid URL: '$url'")
-        }
-        if (uri.scheme !in HTTP_SCHEMES || uri.host.isNullOrBlank()) {
-            throw IllegalArgumentException("externalUrl must be an http(s) URL: '$url'")
-        }
-        return url
+    /**
+     * The per-platform override wins field-by-field; missing fields fall back
+     * to the post's own content (so e.g. a text-only override keeps the title).
+     */
+    private fun effectiveCommand(post: Post, platform: Platform): PublishCommand {
+        val override = post.overrides[platform]
+        return PublishCommand(
+            title = override?.title ?: post.content.title,
+            text = override?.text ?: post.content.text,
+            link = override?.link ?: post.content.link,
+        )
     }
 
-    companion object {
-        private val HTTP_SCHEMES = setOf("http", "https")
+    /**
+     * Composer/share URL for a manual account, prefilled with the post's
+     * effective content (per-platform overrides apply, like publish).
+     */
+    fun shareUrl(postId: Long, accountId: Long): ShareUrlResponse {
+        val post = postService.get(postId)
+        val account = accounts.findByIdAndDeletedAtIsNull(accountId)
+            ?: throw NotFoundException("Social account $accountId not found")
+        val adapter = registry.find(account.platform, account.authMethod)
+        val url = adapter?.shareUrl(crypto.decrypt(account.credentialsEnc), effectiveCommand(post, account.platform))
+            ?: throw IllegalArgumentException(
+                "Login option ${account.authMethod} of account $accountId cannot compose a share URL"
+            )
+        return ShareUrlResponse(url)
     }
 }
 

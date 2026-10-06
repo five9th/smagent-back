@@ -27,6 +27,7 @@ data class AccountDto(
     val displayName: String,
     val status: AccountStatus,
     val canPublish: Boolean,
+    val canShare: Boolean,
     val credentialsMasked: Map<String, String>,
     val createdAt: Instant,
     val deletedAt: Instant? = null,

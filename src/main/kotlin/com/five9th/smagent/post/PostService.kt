@@ -2,6 +2,7 @@ package com.five9th.smagent.post
 
 import com.five9th.smagent.common.NotFoundException
 import com.five9th.smagent.common.NotImplementedException
+import com.five9th.smagent.common.Urls
 import com.five9th.smagent.domain.Platform
 import com.five9th.smagent.domain.Post
 import com.five9th.smagent.domain.PostContent
@@ -41,6 +42,7 @@ class PostService(
             content = PostContent(
                 title = normalizedTitle(request.content.title),
                 text = request.content.text.trim(),
+                link = normalizedLink(request.content.link),
             ),
             overrides = request.overrides.toContentMap(),
         )
@@ -53,7 +55,11 @@ class PostService(
             throw IllegalArgumentException("Only DRAFT posts can be edited (post $id is ${post.status})")
         }
         request.content?.let {
-            post.content = PostContent(title = normalizedTitle(it.title), text = it.text.trim())
+            post.content = PostContent(
+                title = normalizedTitle(it.title),
+                text = it.text.trim(),
+                link = normalizedLink(it.link),
+            )
         }
         request.overrides?.let {
             validateOverrides(it)
@@ -101,9 +107,11 @@ class PostService(
 
     private fun toDto(post: Post, includePublications: Boolean): PostDto = PostDto(
         id = post.id,
-        content = PostContentDto(title = post.content.title, text = post.content.text),
+        content = PostContentDto(title = post.content.title, text = post.content.text, link = post.content.link),
         status = post.status,
-        overrides = post.overrides.mapValues { PostContentDto(title = it.value.title, text = it.value.text) },
+        overrides = post.overrides.mapValues {
+            PostContentDto(title = it.value.title, text = it.value.text, link = it.value.link)
+        },
         createdAt = post.createdAt,
         updatedAt = post.updatedAt,
         deletedAt = post.deletedAt,
@@ -117,16 +125,27 @@ class PostService(
 
     private fun normalizedTitle(title: String?): String? = title?.trim()?.takeIf { it.isNotEmpty() }
 
+    /** Blank -> null; validated as an http(s) URL when present. */
+    private fun normalizedLink(link: String?, field: String = "link"): String? =
+        link?.trim()?.takeIf { it.isNotEmpty() }?.let { Urls.requireHttpUrl(it, field) }
+
     /** Map values aren't reached by bean validation (@Valid doesn't cascade into plain map values). */
     private fun validateOverrides(overrides: Map<Platform, PostContentDto>?) {
         overrides?.forEach { (platform, content) ->
             if (content.text.isBlank()) {
                 throw IllegalArgumentException("Override content for $platform must include text")
             }
+            normalizedLink(content.link, "Override link for $platform")
         }
     }
 
     private fun Map<Platform, PostContentDto>?.toContentMap(): MutableMap<Platform, PostContent> =
-        orEmpty().mapValues { PostContent(title = normalizedTitle(it.value.title), text = it.value.text.trim()) }
+        orEmpty().mapValues {
+            PostContent(
+                title = normalizedTitle(it.value.title),
+                text = it.value.text.trim(),
+                link = normalizedLink(it.value.link),
+            )
+        }
             .toMutableMap()
 }

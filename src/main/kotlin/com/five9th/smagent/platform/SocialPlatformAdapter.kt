@@ -28,11 +28,20 @@ interface SocialPlatformAdapter {
     /** False when the login option gives no platform API access (PROFILE_URL). */
     val canPublish: Boolean
 
+    /** True when the login option can compose a prefilled composer/share URL. */
+    val canShare: Boolean get() = false
+
     /** Cheap "who am I" call; a null display name keeps the account's current one. */
     fun verify(credentialsJson: String): VerifyResult
 
     /** Publish text; returns the URL of the created post. */
     fun publish(credentialsJson: String, command: PublishCommand): PublishResult
+
+    /**
+     * Platform composer/share URL prefilled with the content, for manual login
+     * options; null when this option can't compose one.
+     */
+    fun shareUrl(credentialsJson: String, command: PublishCommand): String? = null
 }
 
 data class VerifyResult(val displayName: String?)
@@ -41,6 +50,8 @@ data class PublishCommand(
     /** Self-post title; Reddit requires it, Facebook ignores it. */
     val title: String?,
     val text: String,
+    /** Optional link the post shares; feeds share/composer URLs. */
+    val link: String? = null,
 )
 
 data class PublishResult(val externalUrl: String)

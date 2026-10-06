@@ -75,10 +75,13 @@ Maybe I will figure something out later.
 **Any platform — PROFILE_URL login option**
 
 Every platform also supports the manual `PROFILE_URL` option:
-`{ "profileUrl": "https://facebook.com/my_page" }`. The app gets no API access;
-the account is just a link you can open to create posts by hand. Verify only
-checks that the URL is well-formed http(s); publishing to such an account
-records a failed attempt whose message carries the link.
+`{ "profileUrl": "https://facebook.com/my_page" }` (Reddit adds a required
+`subreddit` — its share URL opens that sub's submit form). The app gets no API
+access; instead `GET /api/posts/{id}/share-url?accountId=` returns the
+platform's composer with the post's content prefilled where the platform
+allows (X: text+link · Reddit: title+link · Facebook/LinkedIn: link). Verify
+only checks the stored fields' shape; publishing to such an account via the
+API records a failed attempt whose message carries the composer link.
 
 Always run the account **verify** endpoint after pasting credentials — it does a
 cheap "who am I" call and tells you immediately if something is wrong.
@@ -111,11 +114,13 @@ PUT    /api/posts/{id}             DRAFT posts only
 DELETE /api/posts/{id}?deletePublications=                    soft delete; flag required for PUBLISHED posts (true -> 501 for now)
 POST   /api/posts/{id}/publish     {accountIds: []}             per-target results
 POST   /api/posts/{id}/publish-manual {accountId, externalUrl?}  record a by-hand post
+GET    /api/posts/{id}/share-url?accountId=                     prefilled composer URL
 
 GET    /api/publications?postId=                                flat attempt log
 ```
 
-`content` is the post's text (and optional title) as one unit. `overrides` maps a
+`content` is the post's text, optional title and optional share `link` as one
+unit. `overrides` maps a
 platform to replacement content, e.g. `{"FACEBOOK": {"text": "shorter text"}}` —
 missing fields fall back to the post's own content at publish time; Reddit needs a
 `title`. Publishing is idempotent-ish per attempt: every

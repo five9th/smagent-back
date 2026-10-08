@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.five9th"
-version = "0.1.1"
+version = "0.2.0"
 description = "smagent"
 
 java {
@@ -59,6 +59,10 @@ springBoot {
 val syncDocsVersion = tasks.register("syncDocsVersion") {
     description = "Rewrites the <!-- gradle:version -->…<!-- /gradle:version --> span in README.md and docs/API.md"
     val version = project.version.toString()
+
+    // also write version into text file
+    file("version").writeText(version)
+
     val docFiles = listOf("README.md", "docs/API.md").map { layout.projectDirectory.file(it).asFile }
     inputs.property("version", version)
     outputs.files(docFiles)

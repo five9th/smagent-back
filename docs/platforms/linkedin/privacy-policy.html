@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Privacy Policy — SMAgent (LinkedIn)</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      line-height: 1.6;
+      color: #1c1e21;
+      max-width: 720px;
+      margin: 0 auto;
+      padding: 2rem 1.25rem;
+    }
+    h1 { font-size: 1.75rem; margin-bottom: 0.25rem; }
+    h2 { font-size: 1.15rem; margin-top: 2rem; }
+    h3 { font-size: 1rem; margin-top: 1.25rem; }
+    .updated { color: #606770; font-size: 0.9rem; }
+  </style>
+</head>
+<body>
+  <h1>Privacy Policy</h1>
+  <p class="updated">Last updated: October 8, 2026</p>
+
+  <p>This privacy policy applies to <strong>smagent_dev_personal</strong> and
+  <strong>smagent_dev_company</strong> ("the applications"), two personal automation tools used to
+  publish posts to my own LinkedIn profile and to a LinkedIn Page (organization) that I own and
+  manage, via the LinkedIn API.</p>
+
+  <h2>Scope</h2>
+  <p>The applications are private, single-user tools. They are not offered to the public, and no
+  other individuals can log in to them or use them. They are used exclusively by the developer to
+  manage content on their own LinkedIn profile and their own LinkedIn Page.</p>
+
+  <h2>Data the applications access</h2>
+
+  <h3>smagent_dev_personal — personal profile</h3>
+  <p>The application uses a LinkedIn member access token of my own account with the following
+  permissions:</p>
+  <ul>
+    <li><strong>w_member_social</strong> — to create and publish posts on my own profile.</li>
+    <li><strong>openid</strong> and <strong>profile</strong> (optional) — to ask LinkedIn which
+    member the token belongs to (via the userinfo endpoint) and to display my own name within the
+    application.</li>
+  </ul>
+  <p>The application may access my member identifier and my display name, and the content of posts
+  it publishes.</p>
+
+  <h3>smagent_dev_company — LinkedIn Page</h3>
+  <p>The application uses an access token of my own account, acting on behalf of a LinkedIn Page I
+  administer, with the following permissions:</p>
+  <ul>
+    <li><strong>w_organization_social</strong> — to create and publish posts on behalf of my Page.</li>
+    <li><strong>r_organization_social_feed</strong> — to read engagement (such as comments) under
+    posts published on my Page, so that I can review and respond to them.</li>
+  </ul>
+  <p>The application may access the Page's identifier, the content of posts it publishes, and
+  engagement on those posts, including the text of comments and the names of their authors as
+  returned by the API. This data is read solely so that I can review and respond to engagement on
+  my own posts; it is not stored beyond what is needed for that purpose, analyzed, profiled, or
+  shared.</p>
+
+  <p>The applications do not collect or store personal data about other LinkedIn members or their
+  profiles beyond what is described above, and do not access members' connections, messages, or
+  any other private data.</p>
+
+  <h2>How data is used and stored</h2>
+  <p>Any data accessed (such as access tokens, my member identifier, my display name, and the Page
+  identifier) is stored privately by the developer, with access tokens encrypted at rest, and used
+  solely to publish and manage content on the developer's own profile and Page. No data is sold,
+  rented, shared with, or transferred to any third party. No data is used for advertising,
+  analytics, profiling, lead generation, or any purpose other than the publishing and engagement
+  review functionality described above.</p>
+
+  <h2>Data retention and deletion</h2>
+  <p>Access tokens and identifiers are retained only as long as the applications are in use. The
+  developer can delete this data at any time by removing the stored configuration. Removing the
+  applications' authorization in
+  <a href="https://www.linkedin.com/psettings/permitted-services">LinkedIn's permitted services settings</a>
+  revokes all access immediately.</p>
+
+  <h2>Contact</h2>
+  <p>If you have questions about this privacy policy, contact:
+    <a href="mailto:smagent_dev@proton.me">smagent_dev@proton.me</a></p>
+</body>
+</html>

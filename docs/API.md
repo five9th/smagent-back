@@ -68,7 +68,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 
 ```
 Platform:            FACEBOOK | REDDIT | X | LINKEDIN
-AuthMethod:          PAGE_ACCESS_TOKEN | PASSWORD_GRANT | PROFILE_URL
+AuthMethod:          PAGE_ACCESS_TOKEN | PASSWORD_GRANT | ACCESS_TOKEN | PROFILE_URL
 CredentialFieldKind: ID | TOKEN | PASSWORD
 AccountStatus:       UNVERIFIED | ACTIVE | INVALID
 PostStatus:          DRAFT | PUBLISHED
@@ -206,12 +206,13 @@ Missing required credential fields → `400` listing them.
 | `FACEBOOK` | `PAGE_ACCESS_TOKEN` | `pageId`, `pageAccessToken`                                     | Long-lived Page token (README has the walkthrough). Verify → page name.            |
 | `REDDIT`   | `PASSWORD_GRANT`    | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
 | `REDDIT`   | `PROFILE_URL`       | `profileUrl`, `subreddit`                                        | Manual; share URL opens `r/<subreddit>/submit` prefilled.            |
+| `LINKEDIN` | `ACCESS_TOKEN`      | `accessToken`                                                    | Member (personal profile) token, scopes `openid profile w_member_social`; expires ~60 days. Verify → member name. Posts to `POST /rest/posts`; the title is ignored, a `link` is appended to the text. |
 | other      | `PROFILE_URL`       | `profileUrl`                                                     | Manual; share URL opens the platform composer (link prefilled where supported). |
 
 Field kinds: `pageId`, Reddit's `clientId`/`username`/`subreddit`, `profileUrl`
-→ `ID` (shown in full); `pageAccessToken`, `clientSecret` → `TOKEN` (`••••` +
-last 4); `password` → `PASSWORD` (fully masked). Undeclared fields default to
-`PASSWORD` — secrets fail closed.
+→ `ID` (shown in full); `pageAccessToken`, `clientSecret`, `accessToken`
+→ `TOKEN` (`••••` + last 4); `password` → `PASSWORD` (fully masked). Undeclared
+fields default to `PASSWORD` — secrets fail closed.
 
 ### POST /api/social-accounts/{id}/verify
 

@@ -7,6 +7,7 @@ import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.PublishCommand
 import com.five9th.smagent.platform.PublishResult
 import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdapter
+import com.five9th.smagent.platform.adapter.linkedin.LinkedInAccessTokenAdapter
 import com.five9th.smagent.platform.adapter.reddit.RedditPasswordGrantAdapter
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -40,6 +41,9 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var redditPasswordAdapter: RedditPasswordGrantAdapter
 
+    @MockitoBean
+    lateinit var linkedinAccessTokenAdapter: LinkedInAccessTokenAdapter
+
     @BeforeEach
     fun stubAdapters() {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
@@ -60,6 +64,12 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             )
         )
         whenever(redditPasswordAdapter.canPublish).thenReturn(true)
+        whenever(linkedinAccessTokenAdapter.platform).thenReturn(Platform.LINKEDIN)
+        whenever(linkedinAccessTokenAdapter.authMethod).thenReturn(AuthMethod.ACCESS_TOKEN)
+        whenever(linkedinAccessTokenAdapter.credentialFields).thenReturn(
+            mapOf("accessToken" to CredentialFieldKind.TOKEN)
+        )
+        whenever(linkedinAccessTokenAdapter.canPublish).thenReturn(true)
     }
 
     private fun createAccount(platform: String, authMethod: String, extra: String): Long {
@@ -136,6 +146,29 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             status { isOk() }
             jsonPath("$.status") { value("PUBLISHED") }
             jsonPath("$.publications.length()") { value(2) }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `publish to a LinkedIn account returns the feed update url`() {
+        val liAccount = createAccount("LINKEDIN", "ACCESS_TOKEN", "\"accessToken\":\"tok\"")
+        val postId = createPost(null, "hello", link = "https://example.com/a")
+
+        whenever(linkedinAccessTokenAdapter.publish(any(), any()))
+            .thenReturn(PublishResult("https://www.linkedin.com/feed/update/urn:li:share:1"))
+
+        mvc.post("/api/posts/{id}/publish", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountIds":[$liAccount]}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.postStatus") { value("PUBLISHED") }
+            jsonPath("$.results[0].status") { value("SUCCESS") }
+            jsonPath("$.results[0].platform") { value("LINKEDIN") }
+            jsonPath("$.results[0].externalUrl") {
+                value("https://www.linkedin.com/feed/update/urn:li:share:1")
+            }
         }
     }
 

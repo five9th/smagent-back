@@ -14,6 +14,9 @@ enum class AuthMethod {
     /** Reddit "script"-app OAuth2 password grant. */
     PASSWORD_GRANT,
 
+    /** LinkedIn member (personal profile) OAuth2 access token. */
+    ACCESS_TOKEN,
+
     /** Any platform: just a profile/page link, no API access (manual posting). */
     PROFILE_URL,
 }

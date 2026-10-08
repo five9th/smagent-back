@@ -8,8 +8,8 @@ publication log that records every publish attempt.
 
 Current scope (MVP):
 
-- **Platforms:** Facebook Pages, Reddit (text posts), X & LinkedIn (manual link
-  accounts only — no API access yet)
+- **Platforms:** Facebook Pages, Reddit & LinkedIn (text posts), X (manual link
+  accounts only)
 - **Auth:** one owner account, session cookie (HttpOnly, SameSite=Lax)
 - **Publishing:** synchronous "publish now", per-target success/failure;
   by-hand posts recorded via `publish-manual`
@@ -71,6 +71,19 @@ Maybe I will figure something out later.
 2. ~~Store as `{ "clientId", "clientSecret", "username", "password", "subreddit" }`.
    Password grant works for your own account; tokens are fetched hourly and cached.
    2FA on the account breaks password grant.~~
+
+**LinkedIn (personal profile)**
+1. Create an app at developer.linkedin.com and add the products
+   "Share on LinkedIn" (`w_member_social`) and "Sign In with LinkedIn using
+   OpenID Connect" (`openid`, `profile`).
+2. Run the OAuth2 authorization-code flow yourself (e.g. once from the app's
+   auth URL + the token exchange) and copy the member access token. Request the
+   scopes `openid profile w_member_social` — the adapter asks LinkedIn who the
+   token belongs to via `/v2/userinfo` (`openid`), and falls back to posting
+   through LinkedIn's `{accessTokenSubject}` author placeholder if the token
+   can't answer that; `openid`+`profile` let verify fill the display name.
+3. Store as `{ "accessToken": "..." }`. Member tokens expire after ~60 days —
+   re-paste and re-verify when posts start failing with 401.
 
 **Any platform — PROFILE_URL login option**
 

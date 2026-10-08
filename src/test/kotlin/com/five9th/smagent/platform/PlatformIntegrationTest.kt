@@ -43,7 +43,11 @@ class PlatformIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$[2].loginOptions.length()") { value(1) }
             jsonPath("$[2].loginOptions[0].authMethod") { value("PROFILE_URL") }
             jsonPath("$[3].platform") { value("LINKEDIN") }
-            jsonPath("$[3].loginOptions[0].authMethod") { value("PROFILE_URL") }
+            jsonPath("$[3].loginOptions.length()") { value(2) }
+            jsonPath("$[3].loginOptions[0].authMethod") { value("ACCESS_TOKEN") }
+            jsonPath("$[3].loginOptions[0].canPublish") { value(true) }
+            jsonPath("$[3].loginOptions[0].credentialFields.accessToken") { value("TOKEN") }
+            jsonPath("$[3].loginOptions[1].authMethod") { value("PROFILE_URL") }
         }
     }
 }

@@ -41,3 +41,6 @@ smagent:
   reddit:
     base-url: https://oauth.reddit.com
     token-url: https://www.reddit.com/api/v1/access_token
+  linkedin:
+    base-url: https://api.linkedin.com
+    api-version: "202609"

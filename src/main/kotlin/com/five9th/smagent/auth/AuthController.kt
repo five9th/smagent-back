@@ -65,7 +65,7 @@ class AuthController(
         return UserDto(
             id = user?.id,
             username = authentication.name,
-            role = user?.role?.name ?: "OWNER",
+            role = user?.role?.name ?: "OWNER",  // <- why is OWNER hardcoded here? (fixme)
         )
     }
 }

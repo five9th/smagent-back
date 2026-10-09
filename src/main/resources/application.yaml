@@ -14,6 +14,11 @@ spring:
     console:
       enabled: true
 
+  config:
+    import:
+      - "file:/opt/smagent/config/deployment.yaml"  # deployment-specific configs
+      - "file:/opt/smagent/config/secrets.yaml"     # secrets, duh
+
 server:
   servlet:
     session:
@@ -28,6 +33,7 @@ management:
         include: health,info # only these two exist without auth (SecurityConfig)
 
 smagent:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
   cors:
     allowed-origins: http://localhost:5173
   admin:
@@ -36,11 +42,20 @@ smagent:
   security:
     encryption-key: ${SMAGENT_ENCRYPTION_KEY:}
     key-file: ./data/smagent.key
+
   facebook:
-    graph-api-version: v23.0
+    graph-api-version: v26.0
+
   reddit:
     base-url: https://oauth.reddit.com
     token-url: https://www.reddit.com/api/v1/access_token
+
   linkedin:
     base-url: https://api.linkedin.com
-    api-version: "202609"
+    api-version: 202609
+    callback-endpoint: /api/oauth/linkedin/callback
+    scope-personal: "openid profile w_member_social"
+    scope-company: "rw_organization_admin w_organization_social"
+    
+    client-id: ${LINKEDIN_CLIENT_ID}
+    client-secret: ${LINKEDIN_CLIENT_SECRET}

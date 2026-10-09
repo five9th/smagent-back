@@ -4,6 +4,7 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "smagent")
 class AppProperties(
+    var baseUrl: String = "",
     var cors: Cors = Cors(),
     var facebook: Facebook = Facebook(),
     var reddit: Reddit = Reddit(),
@@ -23,5 +24,11 @@ class AppProperties(
     class LinkedIn(
         var baseUrl: String = "https://api.linkedin.com",
         var apiVersion: String = "202609",
+        var callbackEndPoint: String = "/",
+        var scopePersonal: String = "",
+        var scopeCompany: String = "",
+
+        var clientId: String = "",
+        var clientSecret: String = "",
     )
 }

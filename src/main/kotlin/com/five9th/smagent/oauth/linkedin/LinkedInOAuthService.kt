@@ -120,7 +120,7 @@ class LinkedInOAuthService(
             credentials = mapOf("accessToken" to tokenResponse.accessToken)
         )
 
-        accountService.update(accountId, request)
+        accountService.update(accountId, true, request)
     }
 
     data class LinkedInTokenResponse(

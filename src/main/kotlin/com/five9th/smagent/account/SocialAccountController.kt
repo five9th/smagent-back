@@ -29,8 +29,12 @@ class SocialAccountController(private val service: SocialAccountService) {
     fun get(@PathVariable id: Long): AccountDto = service.getDto(id)
 
     @PutMapping("/{id}")
-    fun update(@PathVariable id: Long, @Valid @RequestBody request: UpdateAccountRequest): AccountDto =
-        service.update(id, request)
+    fun update(
+        @PathVariable id: Long,
+        @RequestParam(defaultValue = "false") mergeCredentials: Boolean,
+        @Valid @RequestBody request: UpdateAccountRequest
+    ): AccountDto =
+        service.update(id, mergeCredentials, request)
 
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)

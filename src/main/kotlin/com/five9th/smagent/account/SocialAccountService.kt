@@ -51,18 +51,27 @@ class SocialAccountService(
         return toDto(accounts.save(account))
     }
 
-    fun update(id: Long, request: UpdateAccountRequest): AccountDto {
+    // mb should've used PATCH endpoint instead of mergeCredentials flag?
+    fun update(id: Long, mergeCredentials: Boolean, request: UpdateAccountRequest): AccountDto {
         val account = get(id)
         request.displayName?.trim()?.takeIf { it.isNotEmpty() }?.let { account.displayName = it }
+
         if (request.authMethod != null && request.credentials == null) {
             throw IllegalArgumentException("Changing authMethod requires submitting new credentials")
         }
+
         request.credentials?.let {
             val authMethod = request.authMethod ?: account.authMethod
             val adapter = registry.get(account.platform, authMethod)
-            validateCredentials(adapter, it)
+
+            val credentials = if (mergeCredentials) {
+                mergeCredentials(request, account, adapter)
+            }
+            else it
+
+            validateCredentials(adapter, credentials)
             account.authMethod = authMethod
-            account.credentialsEnc = crypto.encrypt(mapper.writeValueAsString(it))
+            account.credentialsEnc = crypto.encrypt(mapper.writeValueAsString(credentials))
             account.status = AccountStatus.UNVERIFIED
         }
         return toDto(accounts.save(account))
@@ -102,6 +111,40 @@ class SocialAccountService(
                 "Missing credential field(s) for ${adapter.platform}/${adapter.authMethod}: ${missing.joinToString(", ")}"
             )
         }
+    }
+
+    /** Overrides the values in `account.credentials` with the values from `request.credentials`
+     * Values present in `account.credentials` but not in `request.credentials` are kept in the result as is. */
+    private fun mergeCredentials(
+        request: UpdateAccountRequest,
+        account: SocialAccount,
+        adapter: SocialPlatformAdapter
+    ): Map<String, String> {
+
+        // If request.authMethod is present and differs from account.authMethod
+        request.authMethod?.let {
+            if (it != account.authMethod) {
+                throw IllegalArgumentException(
+                    "Can't merge the credentials while also changing the `authMethod` from ${account.authMethod} to $it"
+                )
+            }
+        }
+
+        val requestCredentials = request.credentials ?: throw IllegalArgumentException(
+            "`mergeCredentials` flag is set but no new credentials provided"
+        )
+
+        val credentialsJson = crypto.decrypt(account.credentialsEnc)
+        val originalCredentials = CredentialParser.parse(
+            credentialsJson,
+            *adapter.credentialFields.keys.toTypedArray()
+        ).toMutableMap()
+
+        for ((key, value) in requestCredentials) {
+            originalCredentials[key] = value
+        }
+
+        return originalCredentials.toMap()
     }
 
     private fun toDto(account: SocialAccount): AccountDto {

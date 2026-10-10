@@ -121,7 +121,7 @@ class LinkedInAccessTokenAdapterTest {
 
         val e = assertFailsWith<PlatformException> { adapter.publish(creds, PublishCommand(null, "hello")) }
         assertEquals(
-            "LinkedIn API error (401): Unauthorized (invalid or expired access token — member tokens last ~60 days)",
+            "LinkedIn API error (401): Unauthorized (invalid or expired access token — LinkedIn tokens last ~60 days)",
             e.message,
         )
     }

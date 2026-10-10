@@ -25,6 +25,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Platform/login-option catalog       | ✅     | `GET /api/platforms` — drives the account-creation form                               |
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
+| LinkedIn publishing                 | ✅     | Member + company page via `POST /rest/posts` (text, optional link); tokens expire ~60 days |
 | Manual publish tracking             | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                     |
 | Share/composer URLs                 | ✅     | `GET /api/posts/{id}/share-url` — prefilled composer for manual accounts              |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
@@ -68,7 +69,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 
 ```
 Platform:            FACEBOOK | REDDIT | X | LINKEDIN
-AuthMethod:          PAGE_ACCESS_TOKEN | PASSWORD_GRANT | ACCESS_TOKEN | PROFILE_URL
+AuthMethod:          PAGE_ACCESS_TOKEN | PASSWORD_GRANT | ACCESS_TOKEN | ORGANIZATION_ACCESS_TOKEN | PROFILE_URL
 CredentialFieldKind: ID | TOKEN | PASSWORD
 AccountStatus:       UNVERIFIED | ACTIVE | INVALID
 PostStatus:          DRAFT | PUBLISHED
@@ -207,9 +208,11 @@ Missing required credential fields → `400` listing them.
 | `REDDIT`   | `PASSWORD_GRANT`    | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
 | `REDDIT`   | `PROFILE_URL`       | `profileUrl`, `subreddit`                                        | Manual; share URL opens `r/<subreddit>/submit` prefilled.            |
 | `LINKEDIN` | `ACCESS_TOKEN`      | `accessToken`                                                    | Member (personal profile) token, scopes `openid profile w_member_social`; expires ~60 days. Verify → member name. Posts to `POST /rest/posts`; the title is ignored, a `link` is appended to the text. |
+| `LINKEDIN` | `ORGANIZATION_ACCESS_TOKEN` | `organizationId`, `accessToken`                          | Company page token, scopes `w_organization_social` (posting; needs a page ADMINISTRATOR/CONTENT_ADMIN role) + `rw_organization_admin` (verify's name lookup). `organizationId` is the numeric page id — a full `urn:li:organization:` prefix pastes too. Verify → page name. |
 | other      | `PROFILE_URL`       | `profileUrl`                                                     | Manual; share URL opens the platform composer (link prefilled where supported). |
 
-Field kinds: `pageId`, Reddit's `clientId`/`username`/`subreddit`, `profileUrl`
+Field kinds: `pageId`, LinkedIn's `organizationId`, Reddit's
+`clientId`/`username`/`subreddit`, `profileUrl`
 → `ID` (shown in full); `pageAccessToken`, `clientSecret`, `accessToken`
 → `TOKEN` (`••••` + last 4); `password` → `PASSWORD` (fully masked). Undeclared
 fields default to `PASSWORD` — secrets fail closed.

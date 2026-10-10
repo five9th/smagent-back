@@ -85,6 +85,23 @@ Maybe I will figure something out later.
 3. Store as `{ "accessToken": "..." }`. Member tokens expire after ~60 days —
    re-paste and re-verify when posts start failing with 401.
 
+**LinkedIn (company page)**
+
+Same OAuth2 flow, but posting as the page instead of yourself:
+1. On the same app, add the **Community Management API** product — it grants
+   the `w_organization_social` (posting) and `rw_organization_admin`
+   (page lookups) scopes.
+2. Your LinkedIn account needs a page role of **Administrator** or
+   **Content Admin** on the target company page.
+3. Get the token with scopes `rw_organization_admin w_organization_social`
+   and store as `{ "organizationId": "...", "accessToken": "..." }` — the
+   numeric page id (a full `urn:li:organization:...` URN pastes too; find the
+   id in the page's admin view or via the lookup API).
+
+Verify reads the page name; if the token is live but verify stays nameless
+(403 on the lookup), posting may still work — the first publish is the real
+test.
+
 **Any platform — PROFILE_URL login option**
 
 Every platform also supports the manual `PROFILE_URL` option:

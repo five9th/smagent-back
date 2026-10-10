@@ -1,6 +1,8 @@
 package com.five9th.smagent.oauth.linkedin
 
 import com.fasterxml.jackson.annotation.JsonProperty
+import com.five9th.smagent.account.SocialAccountService
+import com.five9th.smagent.account.UpdateAccountRequest
 import com.five9th.smagent.config.AppProperties
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
@@ -16,20 +18,29 @@ import java.security.SecureRandom
 import java.util.*
 
 
+// TODO: right now it is for personal profile only, need to add company page too
 @Service
 class LinkedInOAuthService(
     private val props: AppProperties,
-    private val restClientBuilder: RestClient.Builder,
+    restClientBuilder: RestClient.Builder,
+    private val accountService: SocialAccountService // is it ok architecturally ??
 ) {
+
+    private val restClient = restClientBuilder
+        .baseUrl("https://www.linkedin.com")
+        .build()
+
+    private val callbackUrl: String = props.baseUrl + props.linkedin.callbackEndPoint
+    private val oauthFinishedRedirectUrl: String = props.baseUrl + "/accounts" // frontend page
 
     /** First step of 3-legged OAuth: user gets redirected to
      * GET https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id={your_client_id}&redirect_uri={your_callback_url}&state=foobar&scope=liteprofile%20emailaddress%20w_member_social
      *  */
-    fun createAuthorizationUrl(request: HttpServletRequest): String {
+    fun createAuthorizationUrl(request: HttpServletRequest, accountId: Long): String {
         val state = createRandomState()
         saveStateToSession(request, state)
 
-        return buildAuthorizationUrl(state)
+        return buildAuthorizationUrl(accountId, state)
     }
 
     private fun createRandomState(): String {
@@ -39,34 +50,30 @@ class LinkedInOAuthService(
             }
             .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
     }
-
     private fun saveStateToSession(request: HttpServletRequest, state: String) {
         request.getSession(true).setAttribute(STATE_SESSION_KEY, state)
     }
 
-    private fun buildAuthorizationUrl(state: String): String {
+    private fun buildAuthorizationUrl(accountId: Long, state: String): String {
         return "https://www.linkedin.com/oauth/v2/authorization?" +
                 "response_type=code&" +
                 "client_id=${props.linkedin.clientId}&" +
-                "redirect_uri=${urlEncoded(callbackUrl)}&" +
+                "redirect_uri=${urlEncoded("$callbackUrl/$accountId")}&" +
                 "state=$state&" +
                 "scope=${urlEncoded(props.linkedin.scopePersonal)}"
     }
 
-    private val callbackUrl: String = props.baseUrl + props.linkedin.callbackEndPoint
-
-
-    /** Second step: User approves the app permissions and gets redirected to [callbackUrl] (our smagent app)
-     * with params [code] and [state]
+    /** Second step: User approves the app permissions and gets redirected to [callbackUrl] (special endpoint in
+     * our smagent app) with params [code] and [state]
      *
-     * Returns redirectUrl that should bring the user back to smagent app ??? */
-    fun handleCallback(request: HttpServletRequest, code: String, state: String): String {
-        validateState(request, state) // throws an ex if something's wrong
+     * Returns redirectUrl that should bring the user back to smagent app */
+    fun handleCallback(request: HttpServletRequest, accountId: Long, code: String, state: String): String {
+        validateState(request, state) // throws an exception if something's wrong
 
-        val resp = exchangeCodeForAccessToken(code)
-        //todo: we have the token
+        val tokenResponse = exchangeCodeForAccessToken(code)
+        saveToken(accountId, tokenResponse)
 
-        return callbackUrl
+        return oauthFinishedRedirectUrl
     }
 
     private fun validateState(
@@ -89,11 +96,7 @@ class LinkedInOAuthService(
         }
     }
 
-    private val restClient = restClientBuilder
-        .baseUrl("https://www.linkedin.com")
-        .build()
-
-    fun exchangeCodeForAccessToken(code: String): LinkedInTokenResponse {
+     private fun exchangeCodeForAccessToken(code: String): LinkedInTokenResponse {
         val form = LinkedMultiValueMap<String, String>().apply {
             add("grant_type", "authorization_code")
             add("code", code)
@@ -109,6 +112,15 @@ class LinkedInOAuthService(
             .retrieve()
             .body(LinkedInTokenResponse::class.java)
             ?: error("LinkedIn returned an empty token response")
+    }
+
+    private fun saveToken(accountId: Long, tokenResponse: LinkedInTokenResponse) {
+        // rn only save 'access_token', 'refresh_token' will be added later
+        val request = UpdateAccountRequest(
+            credentials = mapOf("accessToken" to tokenResponse.accessToken)
+        )
+
+        accountService.update(accountId, request)
     }
 
     data class LinkedInTokenResponse(

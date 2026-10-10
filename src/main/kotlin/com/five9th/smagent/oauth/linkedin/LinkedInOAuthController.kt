@@ -4,6 +4,7 @@ import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
 import org.springframework.web.bind.annotation.RequestMapping
 import org.springframework.web.bind.annotation.RequestParam
 import org.springframework.web.bind.annotation.RestController
@@ -15,17 +16,19 @@ class LinkedInOAuthController(
     private val linkedInOAuthService: LinkedInOAuthService
 ) {
 
-    @GetMapping("/authorize")
+    @GetMapping("/authorize/{id}")
     fun authorize(
+        @PathVariable id: Long,
         servletRequest: HttpServletRequest,
         response: HttpServletResponse
     ) {
-        val authorizationUrl = linkedInOAuthService.createAuthorizationUrl(servletRequest)
+        val authorizationUrl = linkedInOAuthService.createAuthorizationUrl(servletRequest, id)
         response.sendRedirect(authorizationUrl)
     }
 
-    @GetMapping("/callback")
+    @GetMapping("/callback/{id}")
     fun callback(
+        @PathVariable id: Long,
         @RequestParam(required = false) code: String?,
         @RequestParam(required = false) state: String?,
         @RequestParam(required = false) error: String?,
@@ -48,7 +51,7 @@ class LinkedInOAuthController(
             )
         }
 
-        val redirectUrl = linkedInOAuthService.handleCallback(servletRequest, code, state)
+        val redirectUrl = linkedInOAuthService.handleCallback(servletRequest, id, code, state)
         response.sendRedirect(redirectUrl)
     }
 }

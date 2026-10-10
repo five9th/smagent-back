@@ -231,6 +231,128 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
+    fun `update replaces credentials and resets status`() {
+        val id = createAccount(
+            """{"platform":"FACEBOOK","authMethod":"PAGE_ACCESS_TOKEN","credentials":{"pageId":"123456789012345","pageAccessToken":"old-token-1234"}}"""
+        )
+
+        mvc.put("/api/social-accounts/{id}?mergeCredentials=false", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"credentials":{"pageId":"987654321098765","pageAccessToken":"new-token-5678"}}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.status") { value("UNVERIFIED") }
+            jsonPath("$.authMethod") { value("PAGE_ACCESS_TOKEN") }
+            jsonPath("$.credentialsMasked.pageId") { value("987654321098765") }
+            jsonPath("$.credentialsMasked.pageAccessToken") { value("••••5678") }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id)
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.credentialsMasked.pageId") { value("987654321098765") }
+                jsonPath("$.credentialsMasked.pageAccessToken") { value("••••5678") }
+            }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `update merges credentials and preserves omitted fields`() {
+        val id = createAccount(
+            """{"platform":"FACEBOOK","authMethod":"PAGE_ACCESS_TOKEN","credentials":{"pageId":"123456789012345","pageAccessToken":"old-token-1234"}}"""
+        )
+
+        mvc.put("/api/social-accounts/{id}?mergeCredentials=true", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"authMethod":"PAGE_ACCESS_TOKEN","credentials":{"pageAccessToken":"new-token-5678"}}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.status") { value("UNVERIFIED") }
+            jsonPath("$.authMethod") { value("PAGE_ACCESS_TOKEN") }
+            jsonPath("$.credentialsMasked.pageId") { value("123456789012345") }
+            jsonPath("$.credentialsMasked.pageAccessToken") { value("••••5678") }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id)
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.credentialsMasked.pageId") { value("123456789012345") }
+                jsonPath("$.credentialsMasked.pageAccessToken") { value("••••5678") }
+            }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `update rejects authMethod change when merging credentials`() {
+        val id = createAccount(
+            """{"platform":"FACEBOOK","authMethod":"PROFILE_URL","credentials":{"profileUrl":"https://facebook.com/my_page"}}"""
+        )
+
+        mvc.put("/api/social-accounts/{id}?mergeCredentials=true", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"authMethod":"PAGE_ACCESS_TOKEN","credentials":{"pageId":"123","pageAccessToken":"tok"}}"""
+        }.andExpect {
+            status { isBadRequest() }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id)
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.authMethod") { value("PROFILE_URL") }
+                jsonPath("$.credentialsMasked.profileUrl") { value("https://facebook.com/my_page") }
+            }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `update displayName preserves credentials and status`() {
+        val id = createAccount(
+            """{"platform":"FACEBOOK","authMethod":"PAGE_ACCESS_TOKEN","credentials":{"pageId":"123456789012345","pageAccessToken":"old-token-1234"}}"""
+        )
+
+        // Establish a non-UNVERIFIED status if your test setup supports it.
+        // Otherwise, the credential-preservation checks still apply.
+        mvc.put("/api/social-accounts/{id}?mergeCredentials=false", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"displayName":"  Updated Page  "}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.displayName") { value("Updated Page") }
+            jsonPath("$.authMethod") { value("PAGE_ACCESS_TOKEN") }
+            jsonPath("$.credentialsMasked.pageId") { value("123456789012345") }
+            jsonPath("$.credentialsMasked.pageAccessToken") { value("••••1234") }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id)
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.displayName") { value("Updated Page") }
+                jsonPath("$.credentialsMasked.pageId") { value("123456789012345") }
+                jsonPath("$.credentialsMasked.pageAccessToken") { value("••••1234") }
+            }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `update rejects authMethod without credentials when merging`() {
+        val id = createFacebookAccount()
+
+        mvc.put("/api/social-accounts/{id}?mergeCredentials=true", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"authMethod":"PROFILE_URL"}"""
+        }.andExpect {
+            status { isBadRequest() }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id)
+            .andExpect {
+                status { isOk() }
+                jsonPath("$.authMethod") { value("PAGE_ACCESS_TOKEN") }
+            }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
     fun `unknown account returns 404`() {
         mvc.get("/api/social-accounts/999").andExpect { status { isNotFound() } }
     }

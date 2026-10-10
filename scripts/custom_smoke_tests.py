@@ -11,7 +11,8 @@ seeded from SMAGENT_ADMIN_USERNAME (default admin) / SMAGENT_ADMIN_PASSWORD.
 
 
 
-checks = []
+from smagent_api import BASE, PASSWORD, SmagentApi
+from api_smoke_test import FACEBOOK_CREDS
 
 
 def ts2_list_posts(api: SmagentApi):
@@ -21,15 +22,34 @@ def ts2_list_posts(api: SmagentApi):
     s, d = api.list_posts()
     print("Posts:", d)
 
-def ts3_create_sa(api: SmagentApi):
+def ts_3_merge_credentials(api: SmagentApi):
     s, d = api.login()
-    check("login -> 200 owner", s == 200 and d.get("role") == "OWNER", f"got {s} {d}")
-
-    s, fb = api.create_account("FACEBOOK", "PAGE_ACCESS_TOKEN", FACEBOOK_CREDS)
-    print(s, fb)
-
-    s, d = api.list_accounts()
     print(s, d)
+
+    print("creating account...")
+    s, fb = api.create_account("FACEBOOK", "PAGE_ACCESS_TOKEN", FACEBOOK_CREDS)
+    print(s, fb, '\n')
+    id = fb['id']
+
+    print("account:")
+    s, d = api.get_account(id)
+    print(s, d, '\n')
+
+    new_creds = {
+        # "pageId": "123456789012345",
+        "pageAccessToken": "111111111111111111new",
+    }
+
+    print("updating creds...")
+    s, fb = api.update_account(id, True, credentials=new_creds)
+    print(s, fb, '\n')
+
+    print("acc with updated creds:")
+    s, d = api.get_account(id)
+    print(s, d, '\n')
+
+    s, d = api.delete_account(id)
+    print(s, d, '\n')
 
 
 def main():
@@ -40,8 +60,7 @@ def main():
     # c = Client(BASE)
     api = SmagentApi(BASE)
 
-    # ts2_list_posts(api)
-    ts3_create_sa(api)
+    ts_3_merge_credentials(api)
 
 if __name__ == "__main__":
     main()

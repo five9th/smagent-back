@@ -117,7 +117,7 @@ class SmagentApi:
     def get_account(self, account_id):
         return self._client.request("GET", f"/api/social-accounts/{account_id}")
 
-    def update_account(self, account_id, display_name=UNSET, auth_method=UNSET, credentials=UNSET):
+    def update_account(self, account_id, merge_credentials=False, display_name=UNSET, auth_method=UNSET, credentials=UNSET):
         body: dict = {}
         if display_name is not UNSET:
             body["displayName"] = display_name
@@ -125,7 +125,8 @@ class SmagentApi:
             body["authMethod"] = auth_method
         if credentials is not UNSET:
             body["credentials"] = credentials
-        return self._client.request("PUT", f"/api/social-accounts/{account_id}", body)
+        path = f"/api/social-accounts/{account_id}" + ("?mergeCredentials=true" if merge_credentials else "")
+        return self._client.request("PUT", path, body)
 
     def delete_account(self, account_id):
         return self._client.request("DELETE", f"/api/social-accounts/{account_id}")

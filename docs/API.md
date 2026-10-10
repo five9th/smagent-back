@@ -148,14 +148,14 @@ using them exist as manual links only and cannot be publish targets.
 
 ## Social accounts
 
-| Method | Path                                | Description                                             | Status |
-|--------|-------------------------------------|---------------------------------------------------------|--------|
-| GET    | `/api/social-accounts?showDeleted=` | List (credentials masked)                               | ✅     |
-| POST   | `/api/social-accounts`              | Create                                                  | ✅     |
-| GET    | `/api/social-accounts/{id}`         | Get one                                                 | ✅     |
-| PUT    | `/api/social-accounts/{id}`         | Replace displayName and/or credentials (+ `authMethod`) | ✅     |
-| DELETE | `/api/social-accounts/{id}`         | Soft delete (credentials dropped)                       | ✅     |
-| POST   | `/api/social-accounts/{id}/verify`  | Cheap "who am I" platform call                          | ✅     |
+| Method | Path                                          | Description                                             | Status |
+|--------|-----------------------------------------------|---------------------------------------------------------|--------|
+| GET    | `/api/social-accounts?showDeleted=`           | List (credentials masked)                               | ✅     |
+| POST   | `/api/social-accounts`                        | Create                                                  | ✅     |
+| GET    | `/api/social-accounts/{id}`                   | Get one                                                 | ✅     |
+| PUT    | `/api/social-accounts/{id}?mergeCredentials=` | Replace displayName and/or credentials (+ `authMethod`) | ✅     |
+| DELETE | `/api/social-accounts/{id}`                   | Soft delete (credentials dropped)                       | ✅     |
+| POST   | `/api/social-accounts/{id}/verify`            | Cheap "who am I" platform call                          | ✅     |
 
 ### AccountDto (all responses)
 
@@ -201,13 +201,13 @@ Missing required credential fields → `400` listing them.
 
 **Credential shapes per login option**
 
-| Platform   | `authMethod`        | Required fields                                                 | Notes                                                                              |
-|------------|---------------------|-----------------------------------------------------------------|------------------------------------------------------------------------------------|
-| `FACEBOOK` | `PAGE_ACCESS_TOKEN` | `pageId`, `pageAccessToken`                                     | Long-lived Page token (README has the walkthrough). Verify → page name.            |
-| `REDDIT`   | `PASSWORD_GRANT`    | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable. |
-| `REDDIT`   | `PROFILE_URL`       | `profileUrl`, `subreddit`                                        | Manual; share URL opens `r/<subreddit>/submit` prefilled.            |
-| `LINKEDIN` | `ACCESS_TOKEN`      | `accessToken`                                                    | Member (personal profile) token, scopes `openid profile w_member_social`; expires ~60 days. Verify → member name. Posts to `POST /rest/posts`; the title is ignored, a `link` is appended to the text. |
-| other      | `PROFILE_URL`       | `profileUrl`                                                     | Manual; share URL opens the platform composer (link prefilled where supported). |
+| Platform   | `authMethod`        | Required fields                                                 | Notes                                                                                                                                                                                                  |
+|------------|---------------------|-----------------------------------------------------------------|--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+| `FACEBOOK` | `PAGE_ACCESS_TOKEN` | `pageId`, `pageAccessToken`                                     | Long-lived Page token (README has the walkthrough). Verify → page name.                                                                                                                                |
+| `REDDIT`   | `PASSWORD_GRANT`    | `clientId`, `clientSecret`, `username`, `password`, `subreddit` | ⛔ Reddit closed API access; adapter works but credentials currently unobtainable.                                                                                                                     |
+| `REDDIT`   | `PROFILE_URL`       | `profileUrl`, `subreddit`                                       | Manual; share URL opens `r/<subreddit>/submit` prefilled.                                                                                                                                              |
+| `LINKEDIN` | `ACCESS_TOKEN`      | `accessToken`                                                   | Member (personal profile) token, scopes `openid profile w_member_social`; expires ~60 days. Verify → member name. Posts to `POST /rest/posts`; the title is ignored, a `link` is appended to the text. |
+| other      | `PROFILE_URL`       | `profileUrl`                                                    | Manual; share URL opens the platform composer (link prefilled where supported).                                                                                                                        |
 
 Field kinds: `pageId`, Reddit's `clientId`/`username`/`subreddit`, `profileUrl`
 → `ID` (shown in full); `pageAccessToken`, `clientSecret`, `accessToken`
@@ -230,20 +230,38 @@ error (e.g. `"Facebook API error (400): Malformed access token"`). Always `200`.
 the display name as set. Publishing to such an account records a `FAILED`
 publication whose message carries the link (see publish below).
 
+### PUT /api/social-accounts/{id}?mergeCredentials=false
+
+```json
+{ "displayName": "My Page",
+  "authMethod": "PAGE_ACCESS_TOKEN",
+  "credentials": { "...": "..." } }
+```
+
+Replace displayName / authMethod / credentials. Every field is optional but `authMethod` can't be passed without `credentials`.
+By default, the credentials get replaced as a whole blob.
+
+`mergeCredentials=true` - Used to partially update credentials.
+Override only the credential fields given in the request body and leave other fields intact.
+If the `authMethod` is different from the current one for this account and `mergeCredentials` is set to `true` 
+returns `400` 'Can't merge the credentials while also changing the `authMethod` from `{currentMetod}` to `{requestedMethod}`'.
+It is recommended to always pass the `authMethod` when merging credentials to make sure you don't accidentally merge 
+credentials for a wrong auth method.
+
 ---
 
 ## Posts
 
-| Method | Path                                                   | Description                    | Status |
-|--------|--------------------------------------------------------|--------------------------------|--------|
-| GET    | `/api/posts?status=DRAFT\|PUBLISHED&showDeleted=`      | List, newest first             | ✅     |
-| POST   | `/api/posts`                                           | Create DRAFT                   | ✅     |
-| GET    | `/api/posts/{id}`                                      | Detail **incl. publications**  | ✅     |
-| PUT    | `/api/posts/{id}`                                      | Edit (DRAFT only)              | ✅     |
-| DELETE | `/api/posts/{id}?deletePublications=`                  | Soft delete                    | ✅     |
-| POST   | `/api/posts/{id}/publish`                              | Publish to selected accounts   | ✅     |
-| POST   | `/api/posts/{id}/publish-manual`                       | Record a by-hand publication   | ✅     |
-| GET    | `/api/posts/{id}/share-url?accountId=`                 | Composer URL for a manual account | ✅  |
+| Method | Path                                              | Description                       | Status |
+|--------|---------------------------------------------------|-----------------------------------|--------|
+| GET    | `/api/posts?status=DRAFT\|PUBLISHED&showDeleted=` | List, newest first                | ✅     |
+| POST   | `/api/posts`                                      | Create DRAFT                      | ✅     |
+| GET    | `/api/posts/{id}`                                 | Detail **incl. publications**     | ✅     |
+| PUT    | `/api/posts/{id}`                                 | Edit (DRAFT only)                 | ✅     |
+| DELETE | `/api/posts/{id}?deletePublications=`             | Soft delete                       | ✅     |
+| POST   | `/api/posts/{id}/publish`                         | Publish to selected accounts      | ✅     |
+| POST   | `/api/posts/{id}/publish-manual`                  | Record a by-hand publication      | ✅     |
+| GET    | `/api/posts/{id}/share-url?accountId=`            | Composer URL for a manual account | ✅     |
 
 ### POST /api/posts
 

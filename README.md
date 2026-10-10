@@ -116,7 +116,7 @@ GET    /api/platforms                                          platforms + login
 GET    /api/social-accounts?showDeleted=                       IDs shown, tokens tail-masked, passwords hidden
 POST   /api/social-accounts        {platform, authMethod, credentials, displayName?}
 GET    /api/social-accounts/{id}
-PUT    /api/social-accounts/{id}   {displayName?, credentials?}
+PUT    /api/social-accounts/{id}?mergeCredentials=   {displayName?, authMethod?, credentials?}
 DELETE /api/social-accounts/{id}                              soft delete, creds dropped
 POST   /api/social-accounts/{id}/verify                        cheap "who am I" call
 

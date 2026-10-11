@@ -22,6 +22,10 @@ import tools.jackson.databind.json.JsonMapper
 internal fun normalizeOrganizationId(id: String): String =
     id.trim().removePrefix("urn:li:organization:")
 
+/** Strips an optional "urn:li:person:" prefix; both paste styles work. */
+internal fun normalizePersonId(id: String): String =
+    id.trim().removePrefix("urn:li:person:")
+
 private const val RESTLI_PROTOCOL_VERSION = "2.0.0"
 
 /**
@@ -117,12 +121,14 @@ abstract class LinkedInRestAdapter(
  * LinkedIn posting as the authenticated member (personal profile)
  * (needs the w_member_social scope).
  *
- * Credentials: { "accessToken": "..." } — a member token from the OAuth2
- * authorization-code flow, ideally with the scopes
+ * Credentials: { "accessToken": "...", "userId": "..."? } — a member token
+ * from the OAuth2 authorization-code flow, ideally with the scopes
  * `openid profile w_member_social`: openid+profile let verify() resolve the
  * author and display name via GET /v2/userinfo, a Share-on-LinkedIn-only token
- * still posts (see [member]). Member tokens expire after ~60 days and need
- * re-pasting.
+ * still posts (see [member]). The optional userId (the userinfo `sub`) pins
+ * the post author and skips that lookup; left blank it is stored as "" and
+ * the adapter resolves the author itself. Member tokens expire after ~60
+ * days and need re-pasting.
  */
 @Component
 class LinkedInAccessTokenAdapter(
@@ -131,7 +137,11 @@ class LinkedInAccessTokenAdapter(
 ) : LinkedInRestAdapter(props, restClientBuilder) {
 
     override val authMethod = AuthMethod.ACCESS_TOKEN
-    override val credentialFields = mapOf("accessToken" to CredentialFieldKind.TOKEN)
+    override val credentialFields = mapOf(
+        "accessToken" to CredentialFieldKind.TOKEN,
+        "userId" to CredentialFieldKind.ID,
+    )
+    override val credentialsMayBeBlank = setOf("userId")
 
     override fun verify(credentialsJson: String): VerifyResult {
         val member = member(CredentialParser.parse(credentialsJson, "accessToken").getValue("accessToken"))
@@ -139,8 +149,12 @@ class LinkedInAccessTokenAdapter(
         return VerifyResult(displayName = member.name ?: member.id)
     }
 
-    override fun author(credentials: Map<String, String>): String =
-        "urn:li:person:" + (member(credentials.getValue("accessToken"))?.id ?: ACCESS_TOKEN_SUBJECT)
+    override fun author(credentials: Map<String, String>): String {
+        credentials.getValue("userId").trim().takeIf { it.isNotEmpty() }?.let {
+            return "urn:li:person:${normalizePersonId(it)}"
+        }
+        return "urn:li:person:" + (member(credentials.getValue("accessToken"))?.id ?: ACCESS_TOKEN_SUBJECT)
+    }
 
     private data class Member(val id: String, val name: String?)
 

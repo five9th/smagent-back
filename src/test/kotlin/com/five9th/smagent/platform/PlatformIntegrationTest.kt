@@ -47,6 +47,7 @@ class PlatformIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$[3].loginOptions[0].authMethod") { value("ACCESS_TOKEN") }
             jsonPath("$[3].loginOptions[0].canPublish") { value(true) }
             jsonPath("$[3].loginOptions[0].credentialFields.accessToken") { value("TOKEN") }
+            jsonPath("$[3].loginOptions[0].credentialFields.userId") { value("ID") }
             jsonPath("$[3].loginOptions[1].authMethod") { value("ORGANIZATION_ACCESS_TOKEN") }
             jsonPath("$[3].loginOptions[1].canPublish") { value(true) }
             jsonPath("$[3].loginOptions[1].credentialFields.organizationId") { value("ID") }

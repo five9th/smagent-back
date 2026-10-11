@@ -18,12 +18,19 @@ interface SocialPlatformAdapter {
     val authMethod: AuthMethod
 
     /**
-     * Credential fields this login option requires (validated on create/update),
+     * Credential fields this login option declares (validated on create/update),
      * mapped to how each is rendered in `credentialsMasked`: ID in full, TOKEN
      * keeps its last 4 characters, PASSWORD is fully masked. Undeclared fields
      * default to PASSWORD — secrets fail closed.
      */
     val credentialFields: Map<String, CredentialFieldKind>
+
+    /**
+     * Declared fields the user may leave blank — saved as "" instead of failing
+     * validation (e.g. LinkedIn's userId, which merely pins the post author).
+     * Everything in [credentialFields] not listed here is required.
+     */
+    val credentialsMayBeBlank: Set<String> get() = emptySet()
 
     /** False when the login option gives no platform API access (PROFILE_URL). */
     val canPublish: Boolean

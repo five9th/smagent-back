@@ -82,8 +82,11 @@ Maybe I will figure something out later.
    token belongs to via `/v2/userinfo` (`openid`), and falls back to posting
    through LinkedIn's `{accessTokenSubject}` author placeholder if the token
    can't answer that; `openid`+`profile` let verify fill the display name.
-3. Store as `{ "accessToken": "..." }`. Member tokens expire after ~60 days —
-   re-paste and re-verify when posts start failing with 401.
+3. Store as `{ "accessToken": "..." }` — optionally add `"userId"`: the member
+   id (`sub`) that `/v2/userinfo` reports (a full `urn:li:person:` URN pastes
+   too). When set it pins the post author and skips the userinfo lookup —
+   handy for tokens without the `openid` scope. Member tokens expire after
+   ~60 days — re-paste and re-verify when posts start failing with 401.
 
 **LinkedIn (company page)**
 

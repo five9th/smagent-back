@@ -82,6 +82,36 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
+    fun `create stores a blank userId when left out and shows it unmasked when given`() {
+        // present -> shown in full (ID kind)
+        mvc.post("/api/social-accounts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {"platform":"LINKEDIN","authMethod":"ACCESS_TOKEN",
+                 "credentials":{"accessToken":"AQVJverylongtoken1234","userId":"abc123"}}
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••1234") }
+            jsonPath("$.credentialsMasked.userId") { value("abc123") }
+        }
+
+        // absent -> stored as "" (the adapter resolves the author itself at publish)
+        mvc.post("/api/social-accounts") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {"platform":"LINKEDIN","authMethod":"ACCESS_TOKEN",
+                 "credentials":{"accessToken":"AQVJverylongtoken1234"}}
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••1234") }
+            jsonPath("$.credentialsMasked.userId") { value("") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
     fun `create with missing credential field returns 400`() {
         mvc.post("/api/social-accounts") {
             contentType = MediaType.APPLICATION_JSON

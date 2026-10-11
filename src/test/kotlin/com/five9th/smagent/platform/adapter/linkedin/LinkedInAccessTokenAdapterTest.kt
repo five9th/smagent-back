@@ -29,7 +29,7 @@ class LinkedInAccessTokenAdapterTest {
     private val server = MockRestServiceServer.bindTo(builder).build()
     private val adapter = LinkedInAccessTokenAdapter(AppProperties(), builder)
 
-    private val creds = """{"accessToken":"tok"}"""
+    private val creds = """{"accessToken":"tok","userId":""}""" // blank userId: the stored default
 
     @Test
     fun `verify resolves the member name from userinfo`() {
@@ -121,9 +121,41 @@ class LinkedInAccessTokenAdapterTest {
 
         val e = assertFailsWith<PlatformException> { adapter.publish(creds, PublishCommand(null, "hello")) }
         assertEquals(
-            "LinkedIn API error (401): Unauthorized (invalid or expired access token — member tokens last ~60 days)",
+            "LinkedIn API error (401): Unauthorized (invalid or expired access token — LinkedIn tokens last ~60 days)",
             e.message,
         )
+    }
+
+    @Test
+    fun `a stored userId pins the author without any lookup`() {
+        server.expect(requestTo("https://api.linkedin.com/rest/posts"))
+            .andExpect(jsonPath("$.author").value("urn:li:person:pasted7"))
+            .andRespond(withStatus(HttpStatus.CREATED).header("x-restli-id", "urn:li:share:9"))
+
+        adapter.publish("""{"accessToken":"tok","userId":"pasted7"}""", PublishCommand(null, "hello"))
+    }
+
+    @Test
+    fun `a stored userId URN is normalized`() {
+        server.expect(requestTo("https://api.linkedin.com/rest/posts"))
+            .andExpect(jsonPath("$.author").value("urn:li:person:pasted7"))
+            .andRespond(withStatus(HttpStatus.CREATED).header("x-restli-id", "urn:li:share:9"))
+
+        adapter.publish(
+            """{"accessToken":"tok","userId":"urn:li:person:pasted7"}""",
+            PublishCommand(null, "hello"),
+        )
+    }
+
+    @Test
+    fun `a whitespace-only userId falls back to the userinfo lookup`() {
+        server.expect(requestTo("https://api.linkedin.com/v2/userinfo"))
+            .andRespond(withSuccess("""{"sub":"abc123"}""", MediaType.APPLICATION_JSON))
+        server.expect(requestTo("https://api.linkedin.com/rest/posts"))
+            .andExpect(jsonPath("$.author").value("urn:li:person:abc123"))
+            .andRespond(withStatus(HttpStatus.CREATED).header("x-restli-id", "urn:li:share:9"))
+
+        adapter.publish("""{"accessToken":"tok","userId":"  "}""", PublishCommand(null, "hello"))
     }
 
     @Test

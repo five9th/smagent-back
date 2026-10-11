@@ -8,6 +8,7 @@ import com.five9th.smagent.platform.PublishCommand
 import com.five9th.smagent.platform.PublishResult
 import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdapter
 import com.five9th.smagent.platform.adapter.linkedin.LinkedInAccessTokenAdapter
+import com.five9th.smagent.platform.adapter.linkedin.LinkedInOrganizationAccessTokenAdapter
 import com.five9th.smagent.platform.adapter.reddit.RedditPasswordGrantAdapter
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -44,6 +45,9 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var linkedinAccessTokenAdapter: LinkedInAccessTokenAdapter
 
+    @MockitoBean
+    lateinit var linkedinOrganizationAdapter: LinkedInOrganizationAccessTokenAdapter
+
     @BeforeEach
     fun stubAdapters() {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
@@ -70,6 +74,15 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             mapOf("accessToken" to CredentialFieldKind.TOKEN)
         )
         whenever(linkedinAccessTokenAdapter.canPublish).thenReturn(true)
+        whenever(linkedinOrganizationAdapter.platform).thenReturn(Platform.LINKEDIN)
+        whenever(linkedinOrganizationAdapter.authMethod).thenReturn(AuthMethod.ORGANIZATION_ACCESS_TOKEN)
+        whenever(linkedinOrganizationAdapter.credentialFields).thenReturn(
+            mapOf(
+                "organizationId" to CredentialFieldKind.ID,
+                "accessToken" to CredentialFieldKind.TOKEN,
+            )
+        )
+        whenever(linkedinOrganizationAdapter.canPublish).thenReturn(true)
     }
 
     private fun createAccount(platform: String, authMethod: String, extra: String): Long {
@@ -169,6 +182,29 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.results[0].externalUrl") {
                 value("https://www.linkedin.com/feed/update/urn:li:share:1")
             }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `publish to a LinkedIn company page account returns the feed update url`() {
+        val pageAccount = createAccount(
+            "LINKEDIN", "ORGANIZATION_ACCESS_TOKEN",
+            "\"organizationId\":\"5515715\",\"accessToken\":\"tok\""
+        )
+        val postId = createPost(null, "hello")
+
+        whenever(linkedinOrganizationAdapter.publish(any(), any()))
+            .thenReturn(PublishResult("https://www.linkedin.com/feed/update/urn:li:share:2"))
+
+        mvc.post("/api/posts/{id}/publish", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountIds":[$pageAccount]}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.postStatus") { value("PUBLISHED") }
+            jsonPath("$.results[0].status") { value("SUCCESS") }
+            jsonPath("$.results[0].externalUrl") { value("https://www.linkedin.com/feed/update/urn:li:share:2") }
         }
     }
 

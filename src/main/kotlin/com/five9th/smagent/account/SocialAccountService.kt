@@ -46,7 +46,7 @@ class SocialAccountService(
             authMethod = request.authMethod,
             displayName = request.displayName?.trim()?.takeIf { it.isNotEmpty() }
                 ?: "${request.platform} account",
-            credentialsEnc = crypto.encrypt(mapper.writeValueAsString(request.credentials)),
+            credentialsEnc = crypto.encrypt(mapper.writeValueAsString(normalizeCredentials(adapter, request.credentials))),
         )
         return toDto(accounts.save(account))
     }
@@ -65,9 +65,11 @@ class SocialAccountService(
             val adapter = registry.get(account.platform, authMethod)
 
             val credentials = if (mergeCredentials) {
+                // if merging, missing optional values will be taken from the current credential blob
                 mergeCredentials(request, account, adapter)
             }
-            else it
+            // if replacing the whole credential blob (not merging), missing optional values must be added by normalizeCredentials()
+            else normalizeCredentials(adapter, it)
 
             validateCredentials(adapter, credentials)
             account.authMethod = authMethod
@@ -104,13 +106,24 @@ class SocialAccountService(
 
     private fun validateCredentials(adapter: SocialPlatformAdapter, credentials: Map<String, String>) {
         val missing = adapter.credentialFields.keys.filter {
-            credentials[it].isNullOrBlank()
+            it !in adapter.credentialsMayBeBlank && credentials[it].isNullOrBlank()
         }
         if (missing.isNotEmpty()) {
             throw IllegalArgumentException(
                 "Missing credential field(s) for ${adapter.platform}/${adapter.authMethod}: ${missing.joinToString(", ")}"
             )
         }
+    }
+
+    /**
+     * Blank-allowed fields the user left out are stored as "" so the blob
+     * always carries every declared field (adapters read them unconditionally).
+     */
+    private fun normalizeCredentials(adapter: SocialPlatformAdapter, credentials: Map<String, String>): Map<String, String> {
+        if (adapter.credentialsMayBeBlank.isEmpty()) return credentials
+        val result = credentials.toMutableMap()
+        adapter.credentialsMayBeBlank.forEach { result.putIfAbsent(it, "") }
+        return result
     }
 
     /** Overrides the values in `account.credentials` with the values from `request.credentials`

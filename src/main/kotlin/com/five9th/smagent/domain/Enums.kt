@@ -17,6 +17,9 @@ enum class AuthMethod {
     /** LinkedIn member (personal profile) OAuth2 access token. */
     ACCESS_TOKEN,
 
+    /** LinkedIn company page (organization) OAuth2 access token. */
+    ORGANIZATION_ACCESS_TOKEN,
+
     /** Any platform: just a profile/page link, no API access (manual posting). */
     PROFILE_URL,
 }

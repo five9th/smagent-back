@@ -38,6 +38,9 @@ class SocialAccountService(
 
     fun getDto(id: Long): AccountDto = toDto(get(id))
 
+    // TODO: undeclared credential keys — merge drops them, create/replace keep
+    //  them. Pick one: strip extras on write (loses client data) or make merge
+    //  preserve them (keeps junk forever, masked).
     fun create(request: CreateAccountRequest): AccountDto {
         val adapter = registry.get(request.platform, request.authMethod)
         validateCredentials(adapter, request.credentials)
@@ -148,10 +151,11 @@ class SocialAccountService(
         )
 
         val credentialsJson = crypto.decrypt(account.credentialsEnc)
-        val originalCredentials = CredentialParser.parse(
-            credentialsJson,
-            *adapter.credentialFields.keys.toTypedArray()
-        ).toMutableMap()
+        // lenient base: blobs written before a field was declared may lack it —
+        // validateCredentials below gives the honest 400 instead of a parse 502
+        val originalCredentials = CredentialParser.parseAll(credentialsJson)
+            .filterKeys { it in adapter.credentialFields }
+            .toMutableMap()
 
         for ((key, value) in requestCredentials) {
             originalCredentials[key] = value

@@ -250,9 +250,10 @@ By default, the credentials get replaced as a whole blob.
 
 `mergeCredentials=true` - Used to partially update credentials.
 Override only the credential fields given in the request body and leave other fields intact.
-If the `authMethod` is different from the current one for this account and `mergeCredentials` is set to `true` 
-returns `400` 'Can't merge the credentials while also changing the `authMethod` from `{currentMetod}` to `{requestedMethod}`'.
-It is recommended to always pass the `authMethod` when merging credentials to make sure you don't accidentally merge 
+Like a replace, a merge re-validates the resulting blob and resets `status` to `UNVERIFIED`.
+If the `authMethod` is different from the current one for this account and `mergeCredentials` is set to `true`
+returns `400` "Can't merge the credentials while also changing the `authMethod` from `account.authMethod` to `request.authMethod`".
+It is recommended to always pass the `authMethod` when merging credentials to make sure you don't accidentally merge
 credentials for a wrong auth method.
 
 ---

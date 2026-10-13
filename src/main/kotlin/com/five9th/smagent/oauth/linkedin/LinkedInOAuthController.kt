@@ -1,5 +1,6 @@
 package com.five9th.smagent.oauth.linkedin
 
+import com.five9th.smagent.common.NotFoundException
 import jakarta.servlet.http.HttpServletRequest
 import jakarta.servlet.http.HttpServletResponse
 import org.springframework.http.HttpStatus
@@ -26,6 +27,11 @@ class LinkedInOAuthController(
         response.sendRedirect(authorizationUrl)
     }
 
+    /**
+     * Terminal leg of the 3-legged OAuth, hit by a top-level browser
+     * navigation from LinkedIn — so every failure mode must land the user
+     * back in the SPA with an `oauthError` message, never a raw JSON error.
+     */
     @GetMapping("/callback")
     fun callback(
         @RequestParam(required = false) code: String?,
@@ -36,23 +42,29 @@ class LinkedInOAuthController(
         servletRequest: HttpServletRequest,
         response: HttpServletResponse
     ) {
-        if (error != null) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "LinkedIn authorization failed: ${errorDescription ?: error}"
-            )
-        }
+        val redirectUrl = try {
+            when {
+                error != null -> throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "LinkedIn authorization failed: ${errorDescription ?: error}"
+                )
 
-        if (code.isNullOrBlank() || state.isNullOrBlank()) {
-            throw ResponseStatusException(
-                HttpStatus.BAD_REQUEST,
-                "Missing authorization code or state"
-            )
-        }
+                code.isNullOrBlank() || state.isNullOrBlank() -> throw ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Missing authorization code or state"
+                )
 
-        // the target account comes from the session (bound to the state at
-        // authorize time), not from the request
-        val redirectUrl = linkedInOAuthService.handleCallback(servletRequest, code, state)
+                else -> linkedInOAuthService.handleCallback(servletRequest, code, state)
+            }
+        } catch (e: ResponseStatusException) {
+            linkedInOAuthService.finishedRedirectUrl(e.reason ?: "Authorization failed")
+        } catch (e: NotFoundException) {
+            // the account vanished between authorize and callback
+            linkedInOAuthService.finishedRedirectUrl(e.message ?: "Account not found")
+        } catch (e: IllegalArgumentException) {
+            // the account's login option changed shape mid-flight (merge validation)
+            linkedInOAuthService.finishedRedirectUrl(e.message ?: "Account update rejected")
+        }
         response.sendRedirect(redirectUrl)
     }
 }

@@ -6,10 +6,14 @@ import com.five9th.smagent.account.UpdateAccountRequest
 import com.five9th.smagent.config.AppProperties
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
+import tools.jackson.databind.JsonNode
+import tools.jackson.databind.json.JsonMapper
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Service
 import org.springframework.util.LinkedMultiValueMap
 import org.springframework.web.client.RestClient
+import org.springframework.web.client.RestClientException
+import org.springframework.web.client.RestClientResponseException
 import org.springframework.web.server.ResponseStatusException
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -45,8 +49,15 @@ class LinkedInOAuthService(
         .baseUrl("https://www.linkedin.com")
         .build()
 
+    private val mapper = JsonMapper.builder().build()
+
     private val callbackUrl: String = props.baseUrl + props.linkedin.callbackEndPoint
     private val oauthFinishedRedirectUrl: String = props.baseUrl + "/accounts" // frontend page
+
+    /** The SPA page the OAuth flow lands on — with [error] when it failed. */
+    fun finishedRedirectUrl(error: String? = null): String =
+        if (error == null) oauthFinishedRedirectUrl
+        else oauthFinishedRedirectUrl + "?oauthError=" + urlEncoded(error)
 
     /** First step of 3-legged OAuth: user gets redirected to
      * GET https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id={your_client_id}&redirect_uri={your_callback_url}&state=foobar&scope=liteprofile%20emailaddress%20w_member_social
@@ -99,7 +110,7 @@ class LinkedInOAuthService(
      * state. Anything off fails as an invalid state. */
     private fun consumePendingOAuth(request: HttpServletRequest, returnedState: String): Long {
         val session = request.getSession(false)
-            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED)
+            ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED, "No active session — restart the authorization")
 
         val pending = session.getAttribute(PENDING_OAUTH_SESSION_KEY) as? String
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing OAuth state")
@@ -128,14 +139,42 @@ class LinkedInOAuthService(
             add("redirect_uri", callbackUrl)
         }
 
-        return restClient.post()
-            .uri("/oauth/v2/accessToken")
-            .contentType(MediaType.APPLICATION_FORM_URLENCODED)
-            .body(form)
-            .retrieve()
-            .body(LinkedInTokenResponse::class.java)
-            ?: error("LinkedIn returned an empty token response")
+        return try {
+            restClient.post()
+                .uri("/oauth/v2/accessToken")
+                .contentType(MediaType.APPLICATION_FORM_URLENCODED)
+                .body(form)
+                .retrieve()
+                .body(LinkedInTokenResponse::class.java)
+                ?: throw ResponseStatusException(
+                    HttpStatus.BAD_GATEWAY,
+                    "LinkedIn returned an empty token response"
+                )
+        } catch (e: RestClientResponseException) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "LinkedIn token exchange failed (${e.statusCode.value()}): ${extractErrorMessage(e)}"
+            )
+        } catch (e: RestClientException) {
+            throw ResponseStatusException(
+                HttpStatus.BAD_GATEWAY,
+                "LinkedIn token exchange could not be completed: ${e.message}"
+            )
+        }
     }
+
+    /** LinkedIn's OAuth errors are JSON like {"error":"invalid_grant","error_description":"..."}. */
+    private fun extractErrorMessage(e: RestClientResponseException): String = try {
+        val root: JsonNode = mapper.readTree(e.responseBodyAsString)
+        root.path("error_description").asStringOrNull()
+            ?: root.path("error").asStringOrNull()
+            ?: e.statusText
+    } catch (_: Exception) {
+        e.statusText
+    }
+
+    private fun JsonNode.asStringOrNull(): String? =
+        if (isNull || isMissingNode) null else asString()
 
     private fun saveToken(accountId: Long, tokenResponse: LinkedInTokenResponse) {
         // rn only save 'access_token', 'refresh_token' will be added later

@@ -14,8 +14,13 @@ spring:
       enabled: false
 
 smagent:
+  base-url: "" # OAuth redirect targets stay path-only, independent of APP_BASE_URL
   admin:
     username: test-owner
     password: test-password
   security:
     key-file: ./build/test-data/smagent.key
+  linkedin:
+    # pinned so OAuth tests don't depend on LINKEDIN_* env vars being unset
+    client-id: test-client-id
+    client-secret: test-client-secret

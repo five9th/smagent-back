@@ -50,12 +50,17 @@ class LinkedInOAuthService(
 
     /** First step of 3-legged OAuth: user gets redirected to
      * GET https://www.linkedin.com/oauth/v2/authorization?response_type=code&client_id={your_client_id}&redirect_uri={your_callback_url}&state=foobar&scope=liteprofile%20emailaddress%20w_member_social
+     *
+     * The target account travels with the state in the session (one attribute
+     * keeps them atomic), so the callback path stays constant — one redirect
+     * URL to register in the LinkedIn app console, and a tampered callback
+     * path can no longer retarget the token.
      *  */
     fun createAuthorizationUrl(request: HttpServletRequest, accountId: Long): String {
         val state = createRandomState()
-        saveStateToSession(request, state)
+        request.getSession(true).setAttribute(PENDING_OAUTH_SESSION_KEY, "$accountId:$state")
 
-        return buildAuthorizationUrl(accountId, state)
+        return buildAuthorizationUrl(state)
     }
 
     private fun createRandomState(): String {
@@ -65,25 +70,23 @@ class LinkedInOAuthService(
             }
             .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
     }
-    private fun saveStateToSession(request: HttpServletRequest, state: String) {
-        request.getSession(true).setAttribute(STATE_SESSION_KEY, state)
-    }
 
-    private fun buildAuthorizationUrl(accountId: Long, state: String): String {
+    private fun buildAuthorizationUrl(state: String): String {
         return "https://www.linkedin.com/oauth/v2/authorization?" +
                 "response_type=code&" +
                 "client_id=${props.linkedin.clientId}&" +
-                "redirect_uri=${urlEncoded("$callbackUrl/$accountId")}&" +
+                "redirect_uri=${urlEncoded(callbackUrl)}&" +
                 "state=$state&" +
                 "scope=${urlEncoded(props.linkedin.scopePersonal)}"
     }
 
     /** Second step: User approves the app permissions and gets redirected to [callbackUrl] (special endpoint in
-     * our smagent app) with params [code] and [state]
+     * our smagent app) with params [code] and [state]. The account the token belongs to comes back
+     * from the session (stored at [createAuthorizationUrl]), not from the request.
      *
      * Returns redirectUrl that should bring the user back to smagent app */
-    fun handleCallback(request: HttpServletRequest, accountId: Long, code: String, state: String): String {
-        validateState(request, state) // throws an exception if something's wrong
+    fun handleCallback(request: HttpServletRequest, code: String, state: String): String {
+        val accountId = consumePendingOAuth(request, state)
 
         val tokenResponse = exchangeCodeForAccessToken(code)
         saveToken(accountId, tokenResponse)
@@ -91,24 +94,27 @@ class LinkedInOAuthService(
         return oauthFinishedRedirectUrl
     }
 
-    private fun validateState(
-        request: HttpServletRequest,
-        returnedState: String
-    ) {
+    /** Pops the pending "accountId:state" from the session (single use — a
+     * replayed callback finds nothing left) and constant-time-compares the
+     * state. Anything off fails as an invalid state. */
+    private fun consumePendingOAuth(request: HttpServletRequest, returnedState: String): Long {
         val session = request.getSession(false)
             ?: throw ResponseStatusException(HttpStatus.UNAUTHORIZED)
 
-        val expectedState = session.getAttribute(STATE_SESSION_KEY) as? String
+        val pending = session.getAttribute(PENDING_OAUTH_SESSION_KEY) as? String
             ?: throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Missing OAuth state")
 
-        session.removeAttribute(STATE_SESSION_KEY)
+        session.removeAttribute(PENDING_OAUTH_SESSION_KEY)
 
-        if (!MessageDigest.isEqual(
-                expectedState.toByteArray(),
-                returnedState.toByteArray()
-            )) {
+        val parts = pending.split(':', limit = 2)
+        val accountId = parts.getOrNull(0)?.toLongOrNull()
+        val expectedState = parts.getOrNull(1)
+        if (accountId == null || expectedState == null ||
+            !MessageDigest.isEqual(expectedState.toByteArray(), returnedState.toByteArray())
+        ) {
             throw ResponseStatusException(HttpStatus.BAD_REQUEST, "Invalid OAuth state")
         }
+        return accountId
     }
 
      private fun exchangeCodeForAccessToken(code: String): LinkedInTokenResponse {
@@ -117,7 +123,9 @@ class LinkedInOAuthService(
             add("code", code)
             add("client_id", props.linkedin.clientId)
             add("client_secret", props.linkedin.clientSecret)
-            add("redirect_uri", callbackUrl) // not sure (todo: test)
+            // must byte-match the authorize leg's redirect_uri — both are the
+            // constant [callbackUrl]
+            add("redirect_uri", callbackUrl)
         }
 
         return restClient.post()
@@ -156,7 +164,9 @@ class LinkedInOAuthService(
 
 
     companion object {
-        private const val STATE_SESSION_KEY = "linkedin_oauth_state"
+        // session attribute holding "accountId:state"; one pending OAuth per
+        // session — a second authorize overwrites the first
+        private const val PENDING_OAUTH_SESSION_KEY = "linkedin_oauth_state"
 
         private fun urlEncoded(value: String): String {
             return URLEncoder.encode(value, StandardCharsets.UTF_8).replace("+", "%20")

@@ -26,9 +26,8 @@ class LinkedInOAuthController(
         response.sendRedirect(authorizationUrl)
     }
 
-    @GetMapping("/callback/{id}")
+    @GetMapping("/callback")
     fun callback(
-        @PathVariable id: Long,
         @RequestParam(required = false) code: String?,
         @RequestParam(required = false) state: String?,
         @RequestParam(required = false) error: String?,
@@ -51,7 +50,9 @@ class LinkedInOAuthController(
             )
         }
 
-        val redirectUrl = linkedInOAuthService.handleCallback(servletRequest, id, code, state)
+        // the target account comes from the session (bound to the state at
+        // authorize time), not from the request
+        val redirectUrl = linkedInOAuthService.handleCallback(servletRequest, code, state)
         response.sendRedirect(redirectUrl)
     }
 }

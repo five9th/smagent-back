@@ -24,7 +24,7 @@ class AppProperties(
     class LinkedIn(
         var baseUrl: String = "https://api.linkedin.com",
         var apiVersion: String = "202609",
-        var callbackEndPoint: String = "/",
+        var callbackEndpoint: String = "/",
         var scopePersonal: String = "",
         var scopeCompany: String = "",
 

@@ -44,6 +44,9 @@ it up together; losing the key makes stored credentials unrecoverable.
 | `SMAGENT_ADMIN_USERNAME`                                | Owner username                                            | `admin`                             |
 | `SMAGENT_ENCRYPTION_KEY`                                | base64 of 32 bytes; overrides the generated key file      | generated into `./data/smagent.key` |
 | `SMAGENT_CORS_ORIGINS` (`smagent.cors.allowed-origins`) | Allowed SPA origins                                       | `http://localhost:5173`             |
+| `APP_BASE_URL` (`smagent.base-url`)                     | Public origin — builds the OAuth redirect/landing URLs   | `http://localhost:8080`             |
+| `LINKEDIN_CLIENT_ID` (`smagent.linkedin.client-id`)     | LinkedIn app client id (OAuth token flow)                | placeholder                          |
+| `LINKEDIN_CLIENT_SECRET` (`smagent.linkedin.client-secret`) | LinkedIn app client secret (OAuth token flow)         | placeholder                          |
 
 ### Deploying on a VPS
 
@@ -76,17 +79,24 @@ Maybe I will figure something out later.
 1. Create an app at developer.linkedin.com and add the products
    "Share on LinkedIn" (`w_member_social`) and "Sign In with LinkedIn using
    OpenID Connect" (`openid`, `profile`).
-2. Run the OAuth2 authorization-code flow yourself (e.g. once from the app's
-   auth URL + the token exchange) and copy the member access token. Request the
-   scopes `openid profile w_member_social` — the adapter asks LinkedIn who the
-   token belongs to via `/v2/userinfo` (`openid`), and falls back to posting
-   through LinkedIn's `{accessTokenSubject}` author placeholder if the token
-   can't answer that; `openid`+`profile` let verify fill the display name.
+2. **Preferred — let the app fetch the token**: set `LINKEDIN_CLIENT_ID` /
+   `LINKEDIN_CLIENT_SECRET`, register `{APP_BASE_URL}/api/oauth/linkedin/callback`
+   as a redirect URL in the app console, then hit
+   `GET /api/oauth/linkedin/authorize/{accountId}` from the browser (the SPA's
+   "get token with OAuth" button; see docs/API.md → OAuth). You land back on
+   the accounts page with the token already merged in. Member profile only —
+   the company-page flow is a TODO.
+   **Manual alternative**: run the OAuth2 authorization-code flow yourself and
+   paste the token — request the scopes `openid profile w_member_social`; the
+   adapter asks LinkedIn who the token belongs to via `/v2/userinfo`
+   (`openid`), and falls back to posting through LinkedIn's
+   `{accessTokenSubject}` author placeholder if the token can't answer that.
 3. Store as `{ "accessToken": "..." }` — optionally add `"userId"`: the member
    id (`sub`) that `/v2/userinfo` reports (a full `urn:li:person:` URN pastes
    too). When set it pins the post author and skips the userinfo lookup —
    handy for tokens without the `openid` scope. Member tokens expire after
-   ~60 days — re-paste and re-verify when posts start failing with 401.
+   ~60 days — when posts start failing with 401, re-run the OAuth flow (or
+   re-paste) and re-verify.
 
 **LinkedIn (company page)**
 
@@ -139,6 +149,9 @@ GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}?mergeCredentials=   {displayName?, authMethod?, credentials?}
 DELETE /api/social-accounts/{id}                              soft delete, creds dropped
 POST   /api/social-accounts/{id}/verify                        cheap "who am I" call
+
+GET    /api/oauth/linkedin/authorize/{id}                      302 to LinkedIn consent (token flow)
+GET    /api/oauth/linkedin/callback                            LinkedIn's redirect target -> 302 to the SPA
 
 GET    /api/posts?status=DRAFT|PUBLISHED&showDeleted=
 POST   /api/posts                  {content: {title?, text}, overrides?}   title required for Reddit

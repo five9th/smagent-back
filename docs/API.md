@@ -26,6 +26,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | LinkedIn publishing                 | ✅     | Member + company page via `POST /rest/posts` (text, optional link); tokens expire ~60 days |
+| LinkedIn token via OAuth            | ✅     | `GET /api/oauth/linkedin/*` — member profile only for now (company page TODO) |
 | Manual publish tracking             | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                     |
 | Share/composer URLs                 | ✅     | `GET /api/posts/{id}/share-url` — prefilled composer for manual accounts              |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
@@ -85,11 +86,11 @@ credential field is rendered in `credentialsMasked`: `ID` in full, `TOKEN` as
 
 ## Authentication
 
-| Method | Path               | Description                      | Status |
-|--------|--------------------|----------------------------------|--------|
-| POST   | `/api/auth/login`  | Authenticate, set session cookie | ✅     |
-| POST   | `/api/auth/logout` | Invalidate session               | ✅     |
-| GET    | `/api/auth/me`     | Current user                     | ✅     |
+| Method | Path               | Description                      |
+|--------|--------------------|----------------------------------|
+| POST   | `/api/auth/login`  | Authenticate, set session cookie |
+| POST   | `/api/auth/logout` | Invalidate session               |
+| GET    | `/api/auth/me`     | Current user                     |
 
 ### POST /api/auth/login
 
@@ -114,9 +115,9 @@ from `SMAGENT_ADMIN_USERNAME` / `SMAGENT_ADMIN_PASSWORD`; only one user exists.
 
 ## Platforms
 
-| Method | Path             | Description                                         | Status |
-|--------|------------------|-----------------------------------------------------|--------|
-| GET    | `/api/platforms` | Platforms + their login options (account form menu) | ✅     |
+| Method | Path             | Description                                         |
+|--------|------------------|-----------------------------------------------------|
+| GET    | `/api/platforms` | Platforms + their login options (account form menu) |
 
 ### GET /api/platforms
 
@@ -151,14 +152,14 @@ using them exist as manual links only and cannot be publish targets.
 
 ## Social accounts
 
-| Method | Path                                          | Description                                             | Status |
-|--------|-----------------------------------------------|---------------------------------------------------------|--------|
-| GET    | `/api/social-accounts?showDeleted=`           | List (credentials masked)                               | ✅     |
-| POST   | `/api/social-accounts`                        | Create                                                  | ✅     |
-| GET    | `/api/social-accounts/{id}`                   | Get one                                                 | ✅     |
-| PUT    | `/api/social-accounts/{id}?mergeCredentials=` | Replace displayName and/or credentials (+ `authMethod`) | ✅     |
-| DELETE | `/api/social-accounts/{id}`                   | Soft delete (credentials dropped)                       | ✅     |
-| POST   | `/api/social-accounts/{id}/verify`            | Cheap "who am I" platform call                          | ✅     |
+| Method | Path                                          | Description                                             |
+|--------|-----------------------------------------------|---------------------------------------------------------|
+| GET    | `/api/social-accounts?showDeleted=`           | List (credentials masked)                               |
+| POST   | `/api/social-accounts`                        | Create                                                  |
+| GET    | `/api/social-accounts/{id}`                   | Get one                                                 |
+| PUT    | `/api/social-accounts/{id}?mergeCredentials=` | Replace displayName and/or credentials (+ `authMethod`) |
+| DELETE | `/api/social-accounts/{id}`                   | Soft delete (credentials dropped)                       |
+| POST   | `/api/social-accounts/{id}/verify`            | Cheap "who am I" platform call                          |
 
 ### AccountDto (all responses)
 
@@ -258,18 +259,71 @@ credentials for a wrong auth method.
 
 ---
 
+## OAuth (LinkedIn)
+
+Gets a fresh member `accessToken` for a `LINKEDIN` / `ACCESS_TOKEN` account via
+the 3-legged OAuth2 authorization-code flow, so tokens never pass through the
+SPA. Needs `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` (see README) and
+`smagent.base-url` set to the public origin — it builds both the
+LinkedIn-registered redirect URL and the SPA landing page.
+
+| Method | Path                                     | Description                                          |
+|--------|------------------------------------------|------------------------------------------------------|
+| GET    | `/api/oauth/linkedin/authorize/{id}`     | Start the flow for account `{id}` → 302 to LinkedIn  |
+| GET    | `/api/oauth/linkedin/callback`           | LinkedIn's redirect target; ends the flow → 302 to the SPA |
+
+Client flow (SPA POV):
+
+1. When adding an account: create it first (`POST /api/social-accounts`) with
+   the user-entered id(s) and a placeholder `accessToken`, keeping the
+   returned account `id`. For an existing account, skip to step 2.
+2. Send the browser to `/api/oauth/linkedin/authorize/{id}` (top-level
+   navigation — the session cookie must ride along).
+3. The user approves on LinkedIn and is bounced back through `/callback`;
+   smagent exchanges the code and **merges** the fresh token into the account
+   (like `PUT ?mergeCredentials=true`: `status` → `UNVERIFIED`, other
+   credential fields kept). The browser finally lands on the SPA accounts
+   page — `{base-url}/accounts`, or `{base-url}/accounts?oauthError=...`
+   when anything failed. The SPA should show that message and offer a retry.
+
+### GET /api/oauth/linkedin/authorize/{id}
+
+`302` to LinkedIn's consent screen (`response_type=code`, the configured
+client id and scopes, and a random `state`). The state and the target account
+travel together in the server session — the callback path itself is constant
+(`{base-url}/api/oauth/linkedin/callback`; register exactly this URL in the
+LinkedIn app console). One pending OAuth per session: starting a second flow
+overwrites the first. Requires authentication → `401`.
+
+### GET /api/oauth/linkedin/callback
+
+Browser-facing terminal leg — LinkedIn calls it top-level with `code` +
+`state` (or `error` + `error_description`). Validates the state (constant-time,
+single-use: a replay finds nothing left), exchanges the code (the exchange's
+`redirect_uri` byte-matches the authorize leg), merges the token, and `302`s
+to the accounts page.
+
+Every expected failure still ends in that redirect — never a JSON error page —
+with a human-readable `oauthError` query param: user denied on LinkedIn,
+missing code/state, missing/invalid/replayed state, dead session ("restart
+the authorization"), failed token exchange (LinkedIn's `error_description`
+surfaced), or the account having vanished / changed login option mid-flight.
+Unexpected server errors still `500` loudly. Requires authentication → `401`.
+
+---
+
 ## Posts
 
-| Method | Path                                              | Description                       | Status |
-|--------|---------------------------------------------------|-----------------------------------|--------|
-| GET    | `/api/posts?status=DRAFT\|PUBLISHED&showDeleted=` | List, newest first                | ✅     |
-| POST   | `/api/posts`                                      | Create DRAFT                      | ✅     |
-| GET    | `/api/posts/{id}`                                 | Detail **incl. publications**     | ✅     |
-| PUT    | `/api/posts/{id}`                                 | Edit (DRAFT only)                 | ✅     |
-| DELETE | `/api/posts/{id}?deletePublications=`             | Soft delete                       | ✅     |
-| POST   | `/api/posts/{id}/publish`                         | Publish to selected accounts      | ✅     |
-| POST   | `/api/posts/{id}/publish-manual`                  | Record a by-hand publication      | ✅     |
-| GET    | `/api/posts/{id}/share-url?accountId=`            | Composer URL for a manual account | ✅     |
+| Method | Path                                              | Description                       |
+|--------|---------------------------------------------------|-----------------------------------|
+| GET    | `/api/posts?status=DRAFT\|PUBLISHED&showDeleted=` | List, newest first                |
+| POST   | `/api/posts`                                      | Create DRAFT                      |
+| GET    | `/api/posts/{id}`                                 | Detail **incl. publications**     |
+| PUT    | `/api/posts/{id}`                                 | Edit (DRAFT only)                 |
+| DELETE | `/api/posts/{id}?deletePublications=`             | Soft delete                       |
+| POST   | `/api/posts/{id}/publish`                         | Publish to selected accounts      |
+| POST   | `/api/posts/{id}/publish-manual`                  | Record a by-hand publication      |
+| GET    | `/api/posts/{id}/share-url?accountId=`            | Composer URL for a manual account |
 
 ### POST /api/posts
 
@@ -432,9 +486,9 @@ cannot compose a URL (API-backed options) → `400`.
 
 ## Publications
 
-| Method | Path                        | Description                    | Status |
-|--------|-----------------------------|--------------------------------|--------|
-| GET    | `/api/publications?postId=` | Flat attempt log, newest first | ✅     |
+| Method | Path                        | Description                    |
+|--------|-----------------------------|--------------------------------|
+| GET    | `/api/publications?postId=` | Flat attempt log, newest first |
 
 ### PublicationDto
 
@@ -461,12 +515,12 @@ A simple list of text messages a user can add/delete and check/uncheck. For demo
 only — standalone items, no relations to other entities, no soft delete, hard
 deleted for real.
 
-| Method | Path                  | Description                        | Status |
-|--------|-----------------------|------------------------------------|--------|
-| GET    | `/api/feedback`       | List, newest first                 | ✅     |
-| POST   | `/api/feedback`       | Add `{text}`                       | ✅     |
-| PATCH  | `/api/feedback/{id}`  | Edit and/or check/uncheck          | ✅     |
-| DELETE | `/api/feedback/{id}`  | Delete (hard)                      | ✅     |
+| Method | Path                  | Description                        |
+|--------|-----------------------|------------------------------------|
+| GET    | `/api/feedback`       | List, newest first                 |
+| POST   | `/api/feedback`       | Add `{text}`                       |
+| PATCH  | `/api/feedback/{id}`  | Edit and/or check/uncheck          |
+| DELETE | `/api/feedback/{id}`  | Delete (hard)                      |
 
 ```json
 { "id": 1, "text": "try the facebook adapter", "checked": false, "createdAt": "..." }

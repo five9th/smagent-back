@@ -27,8 +27,7 @@ import java.util.*
 // note: Some code will probably be moved to a base class when OAuth for other platforms added
 
 /**
- * (this should be moved to the docs)
- * 3-legged OAuth (user POV):
+ * 3-legged OAuth (user POV) — documented in docs/API.md → "OAuth (LinkedIn)":
  *     - when adding an account with a supported *TOKEN AuthMethod:
  *         - user enters LinkedIn user / page ID (optional for user, required for company page)
  *         SPA has a field for a token and a button: 'get token with OAuth'. When clicked:
@@ -51,7 +50,7 @@ class LinkedInOAuthService(
 
     private val mapper = JsonMapper.builder().build()
 
-    private val callbackUrl: String = props.baseUrl + props.linkedin.callbackEndPoint
+    private val callbackUrl: String = props.baseUrl + props.linkedin.callbackEndpoint
     private val oauthFinishedRedirectUrl: String = props.baseUrl + "/accounts" // frontend page
 
     /** The SPA page the OAuth flow lands on — with [error] when it failed. */

@@ -26,7 +26,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | LinkedIn publishing                 | ✅     | Member + company page via `POST /rest/posts` (text, optional link); tokens expire ~60 days |
-| LinkedIn token via OAuth            | ✅     | `GET /api/oauth/linkedin/*` — member profile only for now (company page TODO) |
+| LinkedIn token via OAuth            | ✅     | `GET /api/oauth/linkedin/*` — member + company page (scopes picked by login option) |
 | Manual publish tracking             | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                     |
 | Share/composer URLs                 | ✅     | `GET /api/posts/{id}/share-url` — prefilled composer for manual accounts              |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
@@ -261,9 +261,13 @@ credentials for a wrong auth method.
 
 ## OAuth (LinkedIn)
 
-Gets a fresh member `accessToken` for a `LINKEDIN` / `ACCESS_TOKEN` account via
-the 3-legged OAuth2 authorization-code flow, so tokens never pass through the
-SPA. Needs `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` (see README) and
+Gets a fresh `accessToken` for a LinkedIn token login option — member profile
+(`ACCESS_TOKEN`) or company page (`ORGANIZATION_ACCESS_TOKEN`) — via the
+3-legged OAuth2 authorization-code flow, so tokens never pass through the
+SPA. The account's login option picks the requested scopes (member:
+`openid profile w_member_social`; page: `rw_organization_admin
+w_organization_social` — needs the Community Management API product on the
+app). Needs `LINKEDIN_CLIENT_ID` / `LINKEDIN_CLIENT_SECRET` (see README) and
 `smagent.base-url` set to the public origin — it builds both the
 LinkedIn-registered redirect URL and the SPA landing page.
 
@@ -289,11 +293,18 @@ Client flow (SPA POV):
 ### GET /api/oauth/linkedin/authorize/{id}
 
 `302` to LinkedIn's consent screen (`response_type=code`, the configured
-client id and scopes, and a random `state`). The state and the target account
-travel together in the server session — the callback path itself is constant
+client id, the scopes of the account's login option, and a random `state`).
+The state and the target account travel together in the server session — the
+callback path itself is constant
 (`{base-url}/api/oauth/linkedin/callback`; register exactly this URL in the
 LinkedIn app console). One pending OAuth per session: starting a second flow
-overwrites the first. Requires authentication → `401`.
+overwrites the first.
+
+The account is validated up front: unknown id → `404`, a non-LinkedIn
+account or a login option with no OAuth flow (e.g. `PROFILE_URL`) → `400` —
+as JSON, not redirects, because unlike the callback these are SPA bugs (only
+offer the OAuth button for token login options). Requires authentication →
+`401`.
 
 ### GET /api/oauth/linkedin/callback
 

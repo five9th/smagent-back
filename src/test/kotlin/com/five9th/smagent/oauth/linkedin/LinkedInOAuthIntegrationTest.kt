@@ -23,6 +23,7 @@ import org.springframework.test.web.client.match.MockRestRequestMatchers.request
 import org.springframework.test.web.client.response.MockRestResponseCreators.withStatus
 import org.springframework.test.web.client.response.MockRestResponseCreators.withSuccess
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.delete
 import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 import org.springframework.util.LinkedMultiValueMap
@@ -74,13 +75,20 @@ class LinkedInOAuthIntegrationTest(
     @AfterEach
     fun allExpectedExchangesHappened() = server.verify()
 
-    private fun createAccount(): Long {
+    private fun createAccount(): Long = createAccount(
+        """{"platform":"LINKEDIN","authMethod":"ACCESS_TOKEN",
+           "credentials":{"accessToken":"AQVJoldtoken1234","userId":"mem8"}}"""
+    )
+
+    private fun createOrgAccount(): Long = createAccount(
+        """{"platform":"LINKEDIN","authMethod":"ORGANIZATION_ACCESS_TOKEN",
+           "credentials":{"organizationId":"5515715","accessToken":"AQVJoldtoken1234"}}"""
+    )
+
+    private fun createAccount(body: String): Long {
         val result = mvc.post("/api/social-accounts") {
             contentType = MediaType.APPLICATION_JSON
-            content = """
-                {"platform":"LINKEDIN","authMethod":"ACCESS_TOKEN",
-                 "credentials":{"accessToken":"AQVJoldtoken1234","userId":"mem8"}}
-            """.trimIndent()
+            content = body.trimIndent()
         }.andReturn()
         return Regex("\"id\":(\\d+)").find(result.response.contentAsString)!!.groupValues[1].toLong()
     }
@@ -167,6 +175,61 @@ class LinkedInOAuthIntegrationTest(
             jsonPath("$.credentialsMasked.userId") { value("mem8") }
             jsonPath("$.status") { value("UNVERIFIED") }
         }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `authorize picks the company scopes for a company page account`() {
+        val authed = authorize(createOrgAccount())
+
+        assertTrue(
+            authed.location.contains("scope=rw_organization_admin%20w_organization_social"),
+            authed.location,
+        )
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `company page callback merges the token and keeps the organizationId`() {
+        val accountId = createOrgAccount()
+        val authed = authorize(accountId)
+
+        expectTokenExchange("the-code") {
+            withSuccess("""{"access_token":"AQVJnewtoken5678","expires_in":5183999}""", MediaType.APPLICATION_JSON)
+        }
+
+        mvc.get("/api/oauth/linkedin/callback") {
+            session = authed.session
+            param("code", "the-code")
+            param("state", authed.state)
+        }.andExpect { redirectedUrl("/accounts") }
+
+        mvc.get("/api/social-accounts/{id}", accountId).andExpect {
+            status { isOk() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••5678") }
+            jsonPath("$.credentialsMasked.organizationId") { value("5515715") }
+            jsonPath("$.status") { value("UNVERIFIED") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `authorize rejects accounts that cannot use OAuth before leaving the app`() {
+        // authorize failures are SPA bugs (JSON errors), unlike the
+        // browser-facing callback failures (redirects)
+        val manualAccount = createAccount(
+            """{"platform":"LINKEDIN","authMethod":"PROFILE_URL",
+               "credentials":{"profileUrl":"https://linkedin.com/company/acme"}}"""
+        )
+        mvc.get("/api/oauth/linkedin/authorize/{id}", manualAccount).andExpect { status { isBadRequest() } }
+
+        val facebookAccount = createAccount(
+            """{"platform":"FACEBOOK","authMethod":"PROFILE_URL",
+               "credentials":{"profileUrl":"https://facebook.com/my_page"}}"""
+        )
+        mvc.get("/api/oauth/linkedin/authorize/{id}", facebookAccount).andExpect { status { isBadRequest() } }
+
+        mvc.get("/api/oauth/linkedin/authorize/{id}", 999).andExpect { status { isNotFound() } }
     }
 
     @WithMockUser(roles = ["OWNER"])
@@ -283,8 +346,13 @@ class LinkedInOAuthIntegrationTest(
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `callback for a vanished account redirects with an error`() {
-        val authed = authorize(999) // no such account
+    fun `callback for an account deleted mid-flight redirects with an error`() {
+        val accountId = createAccount()
+        val authed = authorize(accountId)
+
+        // authorize validates the account up front; the mid-flight
+        // disappearance is the remaining failure path
+        mvc.delete("/api/social-accounts/{id}", accountId).andExpect { status { isNoContent() } }
 
         expectTokenExchange("the-code") {
             withSuccess("""{"access_token":"AQVJnewtoken5678","expires_in":5183999}""", MediaType.APPLICATION_JSON)
@@ -298,6 +366,6 @@ class LinkedInOAuthIntegrationTest(
 
         val location = result.response.getHeader("Location")!!
         assertTrue(location.startsWith("/accounts?oauthError="), location)
-        assertTrue(location.contains("Social%20account%20999%20not%20found"), location)
+        assertTrue(location.contains("Social%20account%20${accountId}%20not%20found"), location)
     }
 }

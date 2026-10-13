@@ -84,8 +84,8 @@ Maybe I will figure something out later.
    as a redirect URL in the app console, then hit
    `GET /api/oauth/linkedin/authorize/{accountId}` from the browser (the SPA's
    "get token with OAuth" button; see docs/API.md → OAuth). You land back on
-   the accounts page with the token already merged in. Member profile only —
-   the company-page flow is a TODO.
+   the accounts page with the token already merged in. Works for company
+   pages too — the scopes come from the account's login option.
    **Manual alternative**: run the OAuth2 authorization-code flow yourself and
    paste the token — request the scopes `openid profile w_member_social`; the
    adapter asks LinkedIn who the token belongs to via `/v2/userinfo`
@@ -106,8 +106,12 @@ Same OAuth2 flow, but posting as the page instead of yourself:
    (page lookups) scopes.
 2. Your LinkedIn account needs a page role of **Administrator** or
    **Content Admin** on the target company page.
-3. Get the token with scopes `rw_organization_admin w_organization_social`
-   and store as `{ "organizationId": "...", "accessToken": "..." }` — the
+3. **Preferred — let the app fetch the token**: the OAuth flow is the same as
+   for personal profiles — `GET /api/oauth/linkedin/authorize/{accountId}`
+   picks the company scopes automatically from the account's login option;
+   same registered callback URL, same landing page. **Manual alternative**:
+   run the flow yourself and paste the token.
+4. Store as `{ "organizationId": "...", "accessToken": "..." }` — the
    numeric page id (a full `urn:li:organization:...` URN pastes too; find the
    id in the page's admin view or via the lookup API).
 

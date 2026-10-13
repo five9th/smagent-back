@@ -4,6 +4,8 @@ import com.fasterxml.jackson.annotation.JsonProperty
 import com.five9th.smagent.account.SocialAccountService
 import com.five9th.smagent.account.UpdateAccountRequest
 import com.five9th.smagent.config.AppProperties
+import com.five9th.smagent.domain.AuthMethod
+import com.five9th.smagent.domain.Platform
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import tools.jackson.databind.JsonNode
@@ -21,8 +23,6 @@ import java.security.MessageDigest
 import java.security.SecureRandom
 import java.util.*
 
-
-// TODO: right now it is for personal profile only, need to add company page too
 
 // note: Some code will probably be moved to a base class when OAuth for other platforms added
 
@@ -67,10 +67,31 @@ class LinkedInOAuthService(
      * path can no longer retarget the token.
      *  */
     fun createAuthorizationUrl(request: HttpServletRequest, accountId: Long): String {
+        val scope = scopeFor(accountId)
         val state = createRandomState()
         request.getSession(true).setAttribute(PENDING_OAUTH_SESSION_KEY, "$accountId:$state")
 
-        return buildAuthorizationUrl(state)
+        return buildAuthorizationUrl(state, scope)
+    }
+
+    /**
+     * The account's login option decides which scopes the token needs —
+     * member posting vs company page — and therefore which LinkedIn products
+     * the app must have. Anything that can't do OAuth fails here (400/404)
+     * instead of mid-flow.
+     */
+    private fun scopeFor(accountId: Long): String {
+        val account = accountService.get(accountId)
+        if (account.platform != Platform.LINKEDIN) {
+            throw IllegalArgumentException("Account $accountId is a ${account.platform} account, not LinkedIn")
+        }
+        return when (account.authMethod) {
+            AuthMethod.ACCESS_TOKEN -> props.linkedin.scopePersonal
+            AuthMethod.ORGANIZATION_ACCESS_TOKEN -> props.linkedin.scopeCompany
+            else -> throw IllegalArgumentException(
+                "Login option ${account.authMethod} of account $accountId has no OAuth flow (token login options only)"
+            )
+        }
     }
 
     private fun createRandomState(): String {
@@ -81,13 +102,13 @@ class LinkedInOAuthService(
             .let { Base64.getUrlEncoder().withoutPadding().encodeToString(it) }
     }
 
-    private fun buildAuthorizationUrl(state: String): String {
+    private fun buildAuthorizationUrl(state: String, scope: String): String {
         return "https://www.linkedin.com/oauth/v2/authorization?" +
                 "response_type=code&" +
                 "client_id=${props.linkedin.clientId}&" +
                 "redirect_uri=${urlEncoded(callbackUrl)}&" +
                 "state=$state&" +
-                "scope=${urlEncoded(props.linkedin.scopePersonal)}"
+                "scope=${urlEncoded(scope)}"
     }
 
     /** Second step: User approves the app permissions and gets redirected to [callbackUrl] (special endpoint in

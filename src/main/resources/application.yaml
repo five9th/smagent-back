@@ -16,8 +16,8 @@ spring:
 
   config:
     import:
-      - "file:/opt/smagent/config/deployment.yaml"  # deployment-specific configs
-      - "file:/opt/smagent/config/secrets.yaml"     # secrets, duh
+      - "optional:file:/opt/smagent/config/deployment.yaml"  # deployment-specific configs
+      - "optional:file:/opt/smagent/config/secrets.yaml"     # secrets, duh
 
 server:
   servlet:
@@ -57,5 +57,5 @@ smagent:
     scope-personal: "openid profile w_member_social"
     scope-company: "rw_organization_admin w_organization_social"
     
-    client-id: ${LINKEDIN_CLIENT_ID}
-    client-secret: ${LINKEDIN_CLIENT_SECRET}
+    client-id: ${LINKEDIN_CLIENT_ID:placeholder-client-id}
+    client-secret: ${LINKEDIN_CLIENT_SECRET:placeholder-client-secret}

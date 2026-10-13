@@ -19,6 +19,21 @@ import java.util.*
 
 
 // TODO: right now it is for personal profile only, need to add company page too
+
+// note: Some code will probably be moved to a base class when OAuth for other platforms added
+
+/**
+ * (this should be moved to the docs)
+ * 3-legged OAuth (user POV):
+ *     - when adding an account with a supported *TOKEN AuthMethod:
+ *         - user enters LinkedIn user / page ID (optional for user, required for company page)
+ *         SPA has a field for a token and a button: 'get token with OAuth'. When clicked:
+ *         1) calls `POST /api/social-accounts` to create an account with entered LinkedIn id and empty/placeholder token value and gets created account's `id` in response
+ *         2) calls `/api/oauth/<platform>/authorize/{id}` to init the OAuth process. `id` - id of the account created with `/social-accounts`
+ *     - when updating a token for an existing account:
+ *         - same but go strait to step 2
+ **/
+
 @Service
 class LinkedInOAuthService(
     private val props: AppProperties,

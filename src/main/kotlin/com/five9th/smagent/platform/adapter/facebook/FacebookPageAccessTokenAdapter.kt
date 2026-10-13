@@ -69,6 +69,7 @@ class FacebookPageAccessTokenAdapter(
         val form = LinkedMultiValueMap<String, String>()
         form.add("message", command.text)
         form.add("access_token", creds.getValue("pageAccessToken"))
+        command.link?.let { form.add("link", it) }
 
         val body = call {
             client.post()

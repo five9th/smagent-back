@@ -10,6 +10,7 @@ import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdap
 import com.five9th.smagent.platform.adapter.linkedin.LinkedInAccessTokenAdapter
 import com.five9th.smagent.platform.adapter.linkedin.LinkedInOrganizationAccessTokenAdapter
 import com.five9th.smagent.platform.adapter.reddit.RedditPasswordGrantAdapter
+import com.five9th.smagent.platform.adapter.x.XAccessTokenAdapter
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
@@ -48,6 +49,9 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var linkedinOrganizationAdapter: LinkedInOrganizationAccessTokenAdapter
 
+    @MockitoBean
+    lateinit var xAccessTokenAdapter: XAccessTokenAdapter
+
     @BeforeEach
     fun stubAdapters() {
         whenever(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
@@ -83,6 +87,13 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             )
         )
         whenever(linkedinOrganizationAdapter.canPublish).thenReturn(true)
+        whenever(xAccessTokenAdapter.platform).thenReturn(Platform.X)
+        whenever(xAccessTokenAdapter.authMethod).thenReturn(AuthMethod.ACCESS_TOKEN)
+        whenever(xAccessTokenAdapter.credentialFields).thenReturn(
+            mapOf("accessToken" to CredentialFieldKind.TOKEN, "refreshToken" to CredentialFieldKind.TOKEN)
+        )
+        whenever(xAccessTokenAdapter.credentialsMayBeBlank).thenReturn(setOf("refreshToken"))
+        whenever(xAccessTokenAdapter.canPublish).thenReturn(true)
     }
 
     private fun createAccount(platform: String, authMethod: String, extra: String): Long {
@@ -205,6 +216,73 @@ class PublishIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.postStatus") { value("PUBLISHED") }
             jsonPath("$.results[0].status") { value("SUCCESS") }
             jsonPath("$.results[0].externalUrl") { value("https://www.linkedin.com/feed/update/urn:li:share:2") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `publish with rotated credentials persists the fresh pair on the account`() {
+        val xAccount = createAccount(
+            "X", "ACCESS_TOKEN",
+            "\"accessToken\":\"oldtoken1234\",\"refreshToken\":\"oldrtok9999\""
+        )
+        val postId = createPost(null, "hello")
+
+        whenever(xAccessTokenAdapter.publish(any(), any())).thenReturn(
+            PublishResult(
+                externalUrl = "https://x.com/janedoe/status/1747",
+                refreshedCredentials = mapOf("accessToken" to "newtok5678", "refreshToken" to "newrtok1234"),
+            )
+        )
+
+        mvc.post("/api/posts/{id}/publish", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountIds":[$xAccount]}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.results[0].status") { value("SUCCESS") }
+            jsonPath("$.results[0].externalUrl") { value("https://x.com/janedoe/status/1747") }
+        }
+
+        // the rotated pair (single-use refresh tokens) must outlive the call
+        mvc.get("/api/social-accounts/{id}", xAccount).andExpect {
+            status { isOk() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••5678") }
+            jsonPath("$.credentialsMasked.refreshToken") { value("••••1234") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `a failed publish still persists rotated credentials`() {
+        val xAccount = createAccount(
+            "X", "ACCESS_TOKEN",
+            "\"accessToken\":\"oldtoken1234\",\"refreshToken\":\"oldrtok9999\""
+        )
+        val postId = createPost(null, "hello")
+
+        // refreshed fine, then the retry was rejected — rotation is valid anyway
+        whenever(xAccessTokenAdapter.publish(any(), any())).thenThrow(
+            PlatformException(
+                "X API error (403): Status is a duplicate.",
+                refreshedCredentials = mapOf("accessToken" to "newtok5678", "refreshToken" to "newrtok1234"),
+            )
+        )
+
+        mvc.post("/api/posts/{id}/publish", postId) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"accountIds":[$xAccount]}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.postStatus") { value("DRAFT") }
+            jsonPath("$.results[0].status") { value("FAILED") }
+            jsonPath("$.results[0].errorMessage") { value("X API error (403): Status is a duplicate.") }
+        }
+
+        mvc.get("/api/social-accounts/{id}", xAccount).andExpect {
+            status { isOk() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••5678") }
+            jsonPath("$.credentialsMasked.refreshToken") { value("••••1234") }
         }
     }
 

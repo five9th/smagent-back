@@ -24,3 +24,7 @@ smagent:
     # pinned so OAuth tests don't depend on LINKEDIN_* env vars being unset
     client-id: test-client-id
     client-secret: test-client-secret
+  x:
+    # same reason as linkedin above
+    client-id: test-client-id
+    client-secret: test-client-secret

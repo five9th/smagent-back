@@ -18,7 +18,7 @@ spring:
   config:
     import:
       - "optional:file:/opt/smagent/config/deployment.yaml"  # deployment-specific configs (e.g. base URL, CORS origins)
-      - "optional:file:/opt/smagent/config/secrets.yaml"     # secrets, duh (e.g. IDs & secrets of platform apps)
+      - "optional:file:/opt/smagent/config/secrets.yaml"     # secrets and platform app configs (e.g. IDs & secrets of platform apps)
 
 server:
   servlet:
@@ -57,6 +57,15 @@ smagent:
     callback-endpoint: /api/oauth/linkedin/callback
     scope-personal: "openid profile w_member_social"
     scope-company: "rw_organization_admin w_organization_social"
-    
+
     client-id: ${LINKEDIN_CLIENT_ID}
     client-secret: ${LINKEDIN_CLIENT_SECRET}
+
+  x:
+    base-url: https://api.x.com
+    authorize-url: https://x.com/i/oauth2/authorize
+    callback-endpoint: /api/oauth/x/callback
+    scope: "tweet.read tweet.write users.read offline.access"
+
+    client-id: ${X_CLIENT_ID}
+    client-secret: ${X_CLIENT_SECRET}

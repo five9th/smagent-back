@@ -9,6 +9,7 @@ class AppProperties(
     var facebook: Facebook = Facebook(),
     var reddit: Reddit = Reddit(),
     var linkedin: LinkedIn = LinkedIn(),
+    var x: X = X(),
 ) {
     /** SPA origins allowed to call the API (session cookie needs credentials). */
     class Cors(var allowedOrigins: List<String> = listOf("http://localhost:5173"))
@@ -27,6 +28,22 @@ class AppProperties(
         var callbackEndpoint: String = "/",
         var scopePersonal: String = "",
         var scopeCompany: String = "",
+
+        var clientId: String = "",
+        var clientSecret: String = "",
+    )
+
+    /**
+     * X OAuth2 is PKCE (S256) with a confidential client: the token endpoint
+     * wants the app credentials as HTTP Basic auth, not form fields. Access
+     * tokens last ~2h and refresh tokens rotate on every use — the adapter
+     * persists the rotated pair after each refresh (see XAccessTokenAdapter).
+     */
+    class X(
+        var baseUrl: String = "https://api.x.com",
+        var authorizeUrl: String = "https://x.com/i/oauth2/authorize",
+        var callbackEndpoint: String = "/api/oauth/x/callback",
+        var scope: String = "tweet.read tweet.write users.read offline.access",
 
         var clientId: String = "",
         var clientSecret: String = "",

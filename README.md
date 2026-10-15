@@ -1,6 +1,6 @@
 # SMAgent
 
-Version: <!-- gradle:version -->0.3.1<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.4.0<!-- /gradle:version -->
 
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a
@@ -8,8 +8,8 @@ publication log that records every publish attempt.
 
 Current scope (MVP):
 
-- **Platforms:** Facebook Pages, Reddit & LinkedIn (text posts), X (manual link
-  accounts only)
+- **Platforms:** Facebook Pages, LinkedIn, X (text posts) and Reddit (adapter
+  exists, API closed); every platform also supports manual link accounts
 - **Auth:** one owner account, session cookie (HttpOnly, SameSite=Lax)
 - **Publishing:** synchronous "publish now", per-target success/failure;
   by-hand posts recorded via `publish-manual`
@@ -47,9 +47,12 @@ it up together; losing the key makes stored credentials unrecoverable.
 | `APP_BASE_URL` (`smagent.base-url`)                     | Public origin — builds the OAuth redirect/landing URLs   | `http://localhost:8080`             |
 | `LINKEDIN_CLIENT_ID` (`smagent.linkedin.client-id`)     | LinkedIn app client id (OAuth token flow)                | placeholder                          |
 | `LINKEDIN_CLIENT_SECRET` (`smagent.linkedin.client-secret`) | LinkedIn app client secret (OAuth token flow)         | placeholder                          |
+| `X_CLIENT_ID` (`smagent.x.client-id`)                   | X app OAuth2 client id                                   | placeholder                          |
+| `X_CLIENT_SECRET` (`smagent.x.client-secret`)           | X app OAuth2 client secret                               | placeholder                          |
 
 ### Deploying on a VPS
 
+[//]: # (TODO: mention the yaml configs in '/opt/smagent/')
 Run behind a reverse proxy that terminates TLS (Caddy/nginx). Cookies are
 `SameSite=Lax`; the API is JSON-only and does not mutate on GET, which is the
 CSRF posture while token protection is disabled. Keep the H2 console off and
@@ -119,6 +122,29 @@ Verify reads the page name; if the token is live but verify stays nameless
 (403 on the lookup), posting may still work — the first publish is the real
 test.
 
+**X (X.com account)**
+1. Create a project + app at developer.x.com (app type "Web App"); in the
+   app's **User authentication settings** set up OAuth 2.0, register
+   `{APP_BASE_URL}/api/oauth/x/callback` as the callback/redirect URI, and
+   make the app read-write. Posting needs a plan with post-creation access —
+   the free tier allows a small number of posts per month (~500 at the time
+   of writing).
+2. Set `X_CLIENT_ID` / `X_CLIENT_SECRET` (OAuth 2.0 Client ID and Client
+   Secret from the app's keys page), then create an X account with the
+   `ACCESS_TOKEN` login option and a placeholder token, and hit
+   `GET /api/oauth/x/authorize/{accountId}` from the browser (the SPA's
+   "get token with OAuth" button). X requires PKCE — running the flow
+   yourself by hand is impractical, so the in-app flow is the way.
+3. The flow stores `{ "accessToken", "refreshToken" }`. X access tokens last
+   ~2 hours; whenever one expires the adapter refreshes it automatically via
+   the stored refresh token and persists the new pair (refresh tokens are
+   single-use — rotated on every refresh). A refresh token lives ~6 months
+   (longer with regular use); when it dies, posts start failing with a
+   "re-run the OAuth flow" hint — click the button again.
+
+Verify → `name (@handle)`; the title is ignored and a `link` is appended to
+the text.
+
 **Any platform — PROFILE_URL login option**
 
 Every platform also supports the manual `PROFILE_URL` option:
@@ -156,6 +182,9 @@ POST   /api/social-accounts/{id}/verify                        cheap "who am I" 
 
 GET    /api/oauth/linkedin/authorize/{id}                      302 to LinkedIn consent (token flow)
 GET    /api/oauth/linkedin/callback                            LinkedIn's redirect target -> 302 to the SPA
+
+GET    /api/oauth/x/authorize/{id}                             302 to X consent (OAuth2 + PKCE token flow)
+GET    /api/oauth/x/callback                                   X's redirect target -> 302 to the SPA
 
 GET    /api/posts?status=DRAFT|PUBLISHED&showDeleted=
 POST   /api/posts                  {content: {title?, text}, overrides?}   title required for Reddit

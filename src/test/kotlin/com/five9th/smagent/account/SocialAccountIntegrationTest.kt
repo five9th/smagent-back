@@ -3,8 +3,10 @@ package com.five9th.smagent.account
 import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.CredentialFieldKind
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.VerifyResult
 import com.five9th.smagent.platform.adapter.facebook.FacebookPageAccessTokenAdapter
+import com.five9th.smagent.platform.adapter.x.XAccessTokenAdapter
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.ArgumentMatchers.anyString
@@ -30,6 +32,9 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var facebookPageTokenAdapter: FacebookPageAccessTokenAdapter
 
+    @MockitoBean
+    lateinit var xAccessTokenAdapter: XAccessTokenAdapter
+
     @BeforeEach
     fun stubAdapter() {
         `when`(facebookPageTokenAdapter.platform).thenReturn(Platform.FACEBOOK)
@@ -39,6 +44,13 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
         )
         `when`(facebookPageTokenAdapter.canPublish).thenReturn(true)
         `when`(facebookPageTokenAdapter.verify(anyString())).thenReturn(VerifyResult("Fake Page"))
+        `when`(xAccessTokenAdapter.platform).thenReturn(Platform.X)
+        `when`(xAccessTokenAdapter.authMethod).thenReturn(AuthMethod.ACCESS_TOKEN)
+        `when`(xAccessTokenAdapter.credentialFields).thenReturn(
+            mapOf("accessToken" to CredentialFieldKind.TOKEN, "refreshToken" to CredentialFieldKind.TOKEN)
+        )
+        `when`(xAccessTokenAdapter.credentialsMayBeBlank).thenReturn(setOf("refreshToken"))
+        `when`(xAccessTokenAdapter.canPublish).thenReturn(true)
     }
 
     private fun createAccount(body: String): Long {
@@ -202,6 +214,62 @@ class SocialAccountIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.ok") { value(true) }
             jsonPath("$.account.status") { value("ACTIVE") }
             jsonPath("$.account.displayName") { value("Fake Page") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `verify persists rotated credentials together with the display name`() {
+        val id = createAccount(
+            """{"platform":"X","authMethod":"ACCESS_TOKEN",
+               "credentials":{"accessToken":"oldtoken1234","refreshToken":"oldrtok9999"}}"""
+        )
+        `when`(xAccessTokenAdapter.verify(anyString())).thenReturn(
+            VerifyResult(
+                displayName = "Jane Doe (@janedoe)",
+                refreshedCredentials = mapOf("accessToken" to "newtok5678", "refreshToken" to "newrtok1234"),
+            )
+        )
+
+        mvc.post("/api/social-accounts/{id}/verify", id).andExpect {
+            status { isOk() }
+            jsonPath("$.ok") { value(true) }
+            jsonPath("$.account.status") { value("ACTIVE") }
+            jsonPath("$.account.displayName") { value("Jane Doe (@janedoe)") }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id).andExpect {
+            status { isOk() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••5678") }
+            jsonPath("$.credentialsMasked.refreshToken") { value("••••1234") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `verify failure still persists rotated credentials`() {
+        val id = createAccount(
+            """{"platform":"X","authMethod":"ACCESS_TOKEN",
+               "credentials":{"accessToken":"oldtoken1234","refreshToken":"oldrtok9999"}}"""
+        )
+        `when`(xAccessTokenAdapter.verify(anyString())).thenThrow(
+            PlatformException(
+                "X API error (403): Status is a duplicate.",
+                refreshedCredentials = mapOf("accessToken" to "newtok5678", "refreshToken" to "newrtok1234"),
+            )
+        )
+
+        mvc.post("/api/social-accounts/{id}/verify", id).andExpect {
+            status { isOk() }
+            jsonPath("$.ok") { value(false) }
+            jsonPath("$.account.status") { value("INVALID") }
+            jsonPath("$.message") { value("X API error (403): Status is a duplicate.") }
+        }
+
+        mvc.get("/api/social-accounts/{id}", id).andExpect {
+            status { isOk() }
+            jsonPath("$.credentialsMasked.accessToken") { value("••••5678") }
+            jsonPath("$.credentialsMasked.refreshToken") { value("••••1234") }
         }
     }
 

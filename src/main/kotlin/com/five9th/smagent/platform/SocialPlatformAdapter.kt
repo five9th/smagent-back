@@ -51,7 +51,17 @@ interface SocialPlatformAdapter {
     fun shareUrl(credentialsJson: String, command: PublishCommand): String? = null
 }
 
-data class VerifyResult(val displayName: String?)
+/**
+ * Credential rotation: adapters whose platform rotates tokens on use (X
+ * refresh tokens are single-use) return the freshly issued values here — on
+ * the success results AND on [PlatformException] (a call that refreshed fine
+ * but then failed still rotated the stored refresh token). Callers must
+ * persist the returned fields into the account or it bricks on the next call.
+ */
+data class VerifyResult(
+    val displayName: String?,
+    val refreshedCredentials: Map<String, String>? = null,
+)
 
 data class PublishCommand(
     /** Self-post title; Reddit requires it, Facebook ignores it. */
@@ -61,7 +71,18 @@ data class PublishCommand(
     val link: String? = null,
 )
 
-data class PublishResult(val externalUrl: String)
+data class PublishResult(
+    val externalUrl: String,
+    val refreshedCredentials: Map<String, String>? = null,
+)
 
-/** Upstream platform API failure (bad credentials, rejected post, outage...). */
-class PlatformException(message: String, cause: Throwable? = null) : RuntimeException(message, cause)
+/**
+ * Upstream platform API failure (bad credentials, rejected post, outage...).
+ * [refreshedCredentials] carries rotated token values the caller must persist
+ * even though the call failed (see [VerifyResult]).
+ */
+class PlatformException(
+    message: String,
+    cause: Throwable? = null,
+    val refreshedCredentials: Map<String, String>? = null,
+) : RuntimeException(message, cause)

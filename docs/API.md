@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.3.1<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.4.0<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -27,6 +27,8 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | LinkedIn publishing                 | ✅     | Member + company page via `POST /rest/posts` (text, optional link); tokens expire ~60 days |
 | LinkedIn token via OAuth            | ✅     | `GET /api/oauth/linkedin/*` — member + company page (scopes picked by login option) |
+| X publishing                        | ✅     | `POST /2/tweets` (text, optional link); OAuth2 PKCE flow, ~2h tokens auto-refreshed |
+| X token via OAuth                   | ✅     | `GET /api/oauth/x/*` — PKCE + S256, both tokens stored, auto-rotated on refresh |
 | Manual publish tracking             | ✅     | `POST /api/posts/{id}/publish-manual` — record posts made by hand                     |
 | Share/composer URLs                 | ✅     | `GET /api/posts/{id}/share-url` — prefilled composer for manual accounts              |
 | Publication history                 | ✅     | One row per post × account attempt                                                    |
@@ -140,7 +142,7 @@ marks options that can compose a prefilled composer URL (`GET /api/posts/{id}/sh
         "credentialFields": { "profileUrl": "ID" } }
     ] },
   { "platform": "REDDIT", "loginOptions": [ "... PASSWORD_GRANT ...", "... PROFILE_URL ..." ] },
-  { "platform": "X", "loginOptions": [ { "authMethod": "PROFILE_URL", "canPublish": false, "..." : "..." } ] },
+  { "platform": "X", "loginOptions": [ "... ACCESS_TOKEN ...", "... PROFILE_URL ..." ] },
   { "platform": "LINKEDIN", "loginOptions": [ "..." ] }
 ]
 ```
@@ -214,11 +216,13 @@ adapter copes; everything else is required.
 | `REDDIT`   | `PROFILE_URL`       | `profileUrl`, `subreddit`                                        | Manual; share URL opens `r/<subreddit>/submit` prefilled.            |
 | `LINKEDIN` | `ACCESS_TOKEN`      | `accessToken`, `userId` *(optional)*                             | Member (personal profile) token, scopes `openid profile w_member_social`; expires ~60 days. Verify → member name. Posts to `POST /rest/posts`; the title is ignored, a `link` is appended to the text. Optional `userId` (the `/v2/userinfo` `sub`, a full `urn:li:person:` prefix pastes too) pins the post author and skips the member lookup — handy for tokens without the `openid` scope. |
 | `LINKEDIN` | `ORGANIZATION_ACCESS_TOKEN` | `organizationId`, `accessToken`                          | Company page token, scopes `w_organization_social` (posting; needs a page ADMINISTRATOR/CONTENT_ADMIN role) + `rw_organization_admin` (verify's name lookup). `organizationId` is the numeric page id — a full `urn:li:organization:` prefix pastes too. Verify → page name. |
+| `X`        | `ACCESS_TOKEN`      | `accessToken`, `refreshToken` *(optional)*                      | User token from the OAuth flow (see OAuth (X) below) — with a manually pasted token leave `refreshToken` out. Access tokens last ~2 hours; when a refresh token is stored the adapter refreshes automatically and persists the rotated pair. Verify → `name (@handle)`. The title is ignored; a `link` is appended to the text. |
 | other      | `PROFILE_URL`       | `profileUrl`                                                     | Manual; share URL opens the platform composer (link prefilled where supported). |
 
 Field kinds: `pageId`, LinkedIn's `organizationId`/`userId`, Reddit's
 `clientId`/`username`/`subreddit`, `profileUrl`
-→ `ID` (shown in full); `pageAccessToken`, `clientSecret`, `accessToken`
+→ `ID` (shown in full); `pageAccessToken`, `clientSecret`, `accessToken`,
+X's `refreshToken`
 → `TOKEN` (`••••` + last 4); `password` → `PASSWORD` (fully masked). Undeclared
 fields default to `PASSWORD` — secrets fail closed.
 
@@ -320,6 +324,76 @@ missing code/state, missing/invalid/replayed state, dead session ("restart
 the authorization"), failed token exchange (LinkedIn's `error_description`
 surfaced), or the account having vanished / changed login option mid-flight.
 Unexpected server errors still `500` loudly. Requires authentication → `401`.
+
+---
+
+## OAuth (X)
+
+Gets a fresh token pair for an X `ACCESS_TOKEN` account via OAuth2
+authorization-code flow **with PKCE** (X requires it; `code_challenge_method`
+is always S256). Unlike LinkedIn, where only the access token is saved, X
+access tokens expire after ~2 hours — the flow also stores the refresh token
+(scope `offline.access` is always requested), and the adapter refreshes
+automatically whenever the API answers 401. Refresh tokens are single-use:
+each refresh rotates the pair, and the new values are persisted onto the
+account after every verify/publish (even a failed one). A refresh token lives
+~6 months (longer with regular use); when it expires, calls fail with a
+"re-run the OAuth flow" hint — start the flow again.
+
+Needs `X_CLIENT_ID` / `X_CLIENT_SECRET` (see README) and `smagent.base-url`
+set to the public origin — it builds both the X-registered redirect URL and
+the SPA landing page.
+
+| Method | Path                              | Description                                          |
+|--------|-----------------------------------|------------------------------------------------------|
+| GET    | `/api/oauth/x/authorize/{id}`     | Start the flow for account `{id}` → 302 to X         |
+| GET    | `/api/oauth/x/callback`           | X's redirect target; ends the flow → 302 to the SPA  |
+
+Client flow (SPA POV) — same shape as LinkedIn:
+
+1. When adding an account: create it first (`POST /api/social-accounts`)
+   with a placeholder `accessToken`, keeping the returned account `id`.
+   For an existing account, skip to step 2.
+2. Send the browser to `/api/oauth/x/authorize/{id}` (top-level
+   navigation — the session cookie must ride along).
+3. The user approves on X and is bounced back through `/callback`; smagent
+   exchanges the code (the app credentials go as HTTP Basic auth — X's
+   token endpoint rejects them as form fields) and **merges** the fresh
+   pair into the account (like `PUT ?mergeCredentials=true`: `status` →
+   `UNVERIFIED`). The browser lands on the SPA accounts page —
+   `{base-url}/accounts`, or `{base-url}/accounts?oauthError=...` when
+   anything failed.
+
+### GET /api/oauth/x/authorize/{id}
+
+`302` to X's consent screen (`response_type=code`, the configured client id,
+scope `tweet.read tweet.write users.read offline.access`, a random `state`,
+and the S256 `code_challenge`). The state, the PKCE verifier and the target
+account travel together in the server session — the callback path itself is
+constant (`{base-url}/api/oauth/x/callback`; register exactly this URL in
+the X app's User authentication settings). One pending OAuth per session:
+starting a second flow overwrites the first.
+
+The account is validated up front: unknown id → `404`, a non-X account or a
+login option with no OAuth flow (e.g. `PROFILE_URL`) → `400` — as JSON, not
+redirects, because unlike the callback these are SPA bugs. Requires
+authentication → `401`.
+
+### GET /api/oauth/x/callback
+
+Browser-facing terminal leg — X calls it top-level with `code` + `state`
+(or `error` + `error_description`). Validates the state (constant-time,
+single-use: a replay finds nothing left), exchanges the code with the
+session-held verifier, merges the token pair, and `302`s to the accounts
+page. Every expected failure still ends in that redirect with a
+human-readable `oauthError` query param (same failure set as LinkedIn's
+callback). Unexpected server errors still `500` loudly. Requires
+authentication → `401`.
+
+**Concurrency note:** two simultaneous verify/publish calls on one X account
+race the refresh — exactly one rotation wins; the loser fails with
+`invalid_grant` and the next call succeeds with the persisted token. Harmless
+for a single-owner app.
 
 ---
 

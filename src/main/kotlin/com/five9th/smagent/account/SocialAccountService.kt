@@ -98,13 +98,28 @@ class SocialAccountService(
             val result = adapter.verify(crypto.decrypt(account.credentialsEnc))
             result.displayName?.let { account.displayName = it }
             account.status = AccountStatus.ACTIVE
+            applyRefreshed(account, result.refreshedCredentials)
             accounts.save(account)
             VerifyResponse(toDto(account), ok = true, message = "Credentials verified")
         } catch (e: PlatformException) {
             account.status = AccountStatus.INVALID
+            // the call may still have rotated the credentials (see SocialPlatformAdapter)
+            applyRefreshed(account, e.refreshedCredentials)
             accounts.save(account)
             VerifyResponse(toDto(account), ok = false, message = e.message ?: "Verification failed")
         }
+    }
+
+    /**
+     * Overlays rotated credential values (e.g. X's refreshed token pair) onto
+     * the stored blob in place — deliberately not via [update], which would
+     * re-validate and reset the status the caller is about to set.
+     */
+    private fun applyRefreshed(account: SocialAccount, refreshed: Map<String, String>?) {
+        if (refreshed.isNullOrEmpty()) return
+        val merged = CredentialParser.parseAll(crypto.decrypt(account.credentialsEnc)).toMutableMap()
+        merged.putAll(refreshed)
+        account.credentialsEnc = crypto.encrypt(CredentialParser.write(merged))
     }
 
     private fun validateCredentials(adapter: SocialPlatformAdapter, credentials: Map<String, String>) {

@@ -9,6 +9,7 @@ import com.five9th.smagent.domain.Publication
 import com.five9th.smagent.domain.PublicationStatus
 import com.five9th.smagent.domain.SocialAccount
 import com.five9th.smagent.platform.AdapterRegistry
+import com.five9th.smagent.platform.CredentialParser
 import com.five9th.smagent.platform.PlatformException
 import com.five9th.smagent.platform.PublishCommand
 import com.five9th.smagent.repo.PublicationRepository
@@ -74,6 +75,7 @@ class PublishService(
 
         return try {
             val result = adapter.publish(crypto.decrypt(account.credentialsEnc), effectiveCommand(post, account.platform))
+            persistRefreshed(account, result.refreshedCredentials)
             publication.status = PublicationStatus.SUCCESS
             publication.externalUrl = result.externalUrl
             publication.publishedAt = Instant.now()
@@ -89,8 +91,25 @@ class PublishService(
             )
         } catch (e: PlatformException) {
             log.warn("Publish to {} (account {}) failed: {}", account.platform, account.id, e.message)
+            // the attempt may still have rotated the credentials (see SocialPlatformAdapter)
+            persistRefreshed(account, e.refreshedCredentials)
             fail(publication, account, e.message ?: "Publish failed")
         }
+    }
+
+    /**
+     * Overlays rotated credential values (e.g. X's refreshed token pair) onto
+     * the account and saves it — on success AND failure paths, since the
+     * rotation is valid regardless of the publish outcome. Also syncs the
+     * in-memory entity, so a repeated accountId in one request reuses the
+     * fresh token instead of burning the already-consumed refresh token.
+     */
+    private fun persistRefreshed(account: SocialAccount, refreshed: Map<String, String>?) {
+        if (refreshed.isNullOrEmpty()) return
+        val merged = CredentialParser.parseAll(crypto.decrypt(account.credentialsEnc)).toMutableMap()
+        merged.putAll(refreshed)
+        account.credentialsEnc = crypto.encrypt(CredentialParser.write(merged))
+        accounts.save(account)
     }
 
     private fun fail(publication: Publication, account: SocialAccount, message: String): PublishOutcome {

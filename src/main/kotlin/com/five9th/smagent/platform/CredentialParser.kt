@@ -33,6 +33,9 @@ object CredentialParser {
         return result
     }
 
+    /** Serializes a credential blob back to JSON (inverse of [parseAll]). */
+    fun write(values: Map<String, String>): String = mapper.writeValueAsString(values)
+
     private fun readTree(credentialsJson: String): JsonNode = try {
         mapper.readTree(credentialsJson)
     } catch (e: Exception) {

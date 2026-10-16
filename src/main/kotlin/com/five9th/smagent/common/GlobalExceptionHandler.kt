@@ -1,5 +1,6 @@
 package com.five9th.smagent.common
 
+import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.platform.PlatformException
 import org.slf4j.LoggerFactory
 import org.springframework.http.HttpStatus
@@ -44,6 +45,10 @@ class GlobalExceptionHandler {
     @ExceptionHandler(PlatformException::class)
     @ResponseStatus(HttpStatus.BAD_GATEWAY)
     fun platform(e: PlatformException): ApiError = ApiError(Instant.now(), 502, e.message)
+
+    @ExceptionHandler(AiProviderException::class)
+    @ResponseStatus(HttpStatus.BAD_GATEWAY)
+    fun aiProvider(e: AiProviderException): ApiError = ApiError(Instant.now(), 502, e.message)
 
     @ExceptionHandler(NotImplementedException::class)
     @ResponseStatus(HttpStatus.NOT_IMPLEMENTED)

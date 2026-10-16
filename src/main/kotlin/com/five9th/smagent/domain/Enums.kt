@@ -41,3 +41,18 @@ enum class PublicationStatus { PENDING, SUCCESS, FAILED }
 
 /** Result of the last credential verification per account. */
 enum class AccountStatus { UNVERIFIED, ACTIVE, INVALID }
+
+/** AI backend a provider row points at; the dispatch key for AiProviderAdapter. */
+enum class AiProviderType {
+    /** Anthropic Messages API (api.anthropic.com, or any endpoint implementing it via baseUrl). */
+    ANTHROPIC,
+
+    /** OpenAI-compatible chat-completions (OpenAI, OpenRouter, Groq, Ollama…) — not implemented yet. */
+    OPENAI_COMPATIBLE,
+}
+
+/** Generation target: GENERIC produces the post's own content, the rest per-platform overrides. */
+enum class GeneratePlatform { GENERIC, FACEBOOK, REDDIT, X, LINKEDIN }
+
+/** Reasoning-effort knob passed through to the provider; LOW is the default. */
+enum class GenerateEffort { LOW, MEDIUM, HIGH, XHIGH, MAX }

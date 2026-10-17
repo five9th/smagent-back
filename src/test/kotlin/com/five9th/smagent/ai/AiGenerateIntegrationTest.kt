@@ -4,17 +4,18 @@ import com.five9th.smagent.ai.adapter.AnthropicAdapter
 import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.ai.adapter.GeneratedContent
 import com.five9th.smagent.ai.adapter.GenerateCommand
-import com.five9th.smagent.ai.adapter.GenerateConstraints
 import com.five9th.smagent.ai.adapter.GenerateResult
 import com.five9th.smagent.domain.AiProviderType
 import com.five9th.smagent.domain.GenerateEffort
 import com.five9th.smagent.domain.GeneratePlatform
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.repo.AiProviderRepository
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.argumentCaptor
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
@@ -36,6 +37,9 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var anthropicAdapter: AnthropicAdapter
 
+    @Autowired
+    lateinit var providers: AiProviderRepository
+
     private val cannedResult = GenerateResult(
         content = GeneratedContent("v2 is out", "master text"),
         overrides = mapOf(Platform.REDDIT to GeneratedContent("v2", "community text")),
@@ -45,8 +49,10 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @BeforeEach
     fun stubAdapter() {
+        providers.deleteAll() // the in-mem H2 persists across tests in this context
         whenever(anthropicAdapter.type).thenReturn(AiProviderType.ANTHROPIC)
-        whenever(anthropicAdapter.generate(any(), any(), any(), any(), any())).thenReturn(cannedResult)
+        // baseUrl may be null (no override) — any() alone excludes nulls
+        whenever(anthropicAdapter.generate(any(), anyOrNull(), any(), any(), any())).thenReturn(cannedResult)
     }
 
     private fun createProvider(
@@ -200,7 +206,7 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
     @Test
     fun `upstream failure surfaces as 502`() {
         createProvider()
-        whenever(anthropicAdapter.generate(any(), any(), any(), any(), any())).thenThrow(
+        whenever(anthropicAdapter.generate(any(), anyOrNull(), any(), any(), any())).thenThrow(
             AiProviderException("Anthropic API error (401): invalid x-api-key")
         )
 

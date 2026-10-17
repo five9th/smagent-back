@@ -38,8 +38,10 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Health & version endpoints          | ✅     | `/actuator/health`, `/actuator/info` — no auth, only exposed actuator endpoints       |
 | Delete published post on platform   | ❌     | `deletePublications=true` returns `501` until implemented                             |
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
-| AI provider management + usage      | ❌     | Design below                                                                          |
-| AI text generation / chat           | ❌     | Design below                                                                          |
+| AI provider management              | ✅     | `ANTHROPIC` type; keys encrypted + masked like platform credentials; `OPENAI_COMPATIBLE` planned (creation → `501`) |
+| AI text generation                  | ✅     | `POST /api/ai/generate` — generic + per-platform variants in one call; `OPENAI_COMPATIBLE` planned    |
+| AI usage tracking                   | ❌     | Design below (each response already carries token usage)                              |
+| AI multi-turn chat                  | ❌     | Design below                                                                          |
 | Media upload                        | ❌     | Out of current scope                                                                  |
 | Scheduling                          | ❌     | Out of current scope                                                                  |
 
@@ -61,8 +63,8 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | 400  | validation failure, malformed body, illegal state (e.g. editing a PUBLISHED post, deleting one without `deletePublications`) |
 | 401  | not authenticated (or failed login); wrong-credentials from login returns `{"message": "..."}` (auth-controller-local shape) |
 | 404  | unknown id / endpoint — including soft-deleted accounts and posts                                                            |
-| 501  | recognized but not implemented (`deletePublications=true`)                                                                   |
-| 502  | upstream platform/AI API failure (`PlatformException`)                                                                       |
+| 501  | recognized but not implemented (`deletePublications=true`, creating an `OPENAI_COMPATIBLE` provider)                         |
+| 502  | upstream platform/AI API failure (`PlatformException` / `AiProviderException`)                                               |
 | 500  | unexpected server error (logged)                                                                                             |
 
 **Query flags** use camelCase + `true`/`false` (`showDeleted=true`, `deletePublications=false`).
@@ -77,6 +79,9 @@ CredentialFieldKind: ID | TOKEN | PASSWORD
 AccountStatus:       UNVERIFIED | ACTIVE | INVALID
 PostStatus:          DRAFT | PUBLISHED
 PublicationStatus:   PENDING | SUCCESS | FAILED
+AiProviderType:      ANTHROPIC | OPENAI_COMPATIBLE (creation 501 for now)
+GeneratePlatform:    GENERIC | FACEBOOK | REDDIT | X | LINKEDIN
+GenerateEffort:      LOW | MEDIUM | HIGH | XHIGH | MAX
 ```
 
 `AuthMethod` availability is per platform (see `GET /api/platforms`); only
@@ -662,45 +667,152 @@ Automatic polling (config `smagent.engagement.poll-cron`, default off) — ❌ f
 
 ---
 
-# Planned: AI providers
+# AI providers
 
-status: ❌
+Manage credentials for AI backends. Provider types:
 
-Manage credentials for AI backends. Two provider types cover the whole market:
+| Type                | Provider                                                   | Status |
+|---------------------|------------------------------------------------------------|--------|
+| `ANTHROPIC`         | Anthropic native API (or any endpoint implementing it)     | ✅     |
+| `OPENAI_COMPATIBLE` | OpenAI, OpenRouter, Groq, Mistral, DeepSeek, local Ollama… | ❌ creating returns `501` |
 
-| Type                | Who                                                        | How                                         |
-|---------------------|------------------------------------------------------------|---------------------------------------------|
-| `ANTHROPIC`         | Anthropic native API                                       | `api.anthropic.com`, `x-api-key`            |
-| `OPENAI_COMPATIBLE` | OpenAI, OpenRouter, Groq, Mistral, DeepSeek, local Ollama… | chat-completions via configurable `baseUrl` |
+API keys are stored encrypted (`apiKeyEnc`) and masked in responses
+(`apiKeyMasked`: `••••` + last 4, or plain `••••` when shorter), exactly like
+platform credentials. There is **no stored active/default provider** — the SPA
+passes its choice (`providerId`/`model`) in every generation request and
+remembers it client-side; `/generate` infers only when exactly one provider
+exists.
 
-API keys are stored encrypted (`apiKeyEnc`) and masked in responses, exactly like
-platform credentials. Exactly one provider is **active** at a time; any generation
-call can still target a specific `providerId` for A/B.
+| Method | Path                              | Description                                                        | Status |
+|--------|-----------------------------------|--------------------------------------------------------------------|--------|
+| GET    | `/api/ai-providers`               | List (masked keys), newest first                                   | ✅     |
+| POST   | `/api/ai-providers`               | Create `{name, type, baseUrl?, apiKey, defaultModel?}`             | ✅     |
+| GET    | `/api/ai-providers/{id}`          | Get one                                                            | ✅     |
+| PUT    | `/api/ai-providers/{id}`          | Update name/baseUrl/apiKey/defaultModel (all optional)             | ✅     |
+| DELETE | `/api/ai-providers/{id}`          | Hard delete (nothing references a provider yet)                    | ✅     |
+| POST   | `/api/ai-providers/{id}/verify`   | Cheap authenticated call (models listing)                          | ✅     |
+| GET    | `/api/ai-providers/{id}/models`   | Models the key can use                                             | ❌     |
+| GET    | `/api/ai-providers/{id}/usage`    | Token usage / remaining quota                                      | ❌     |
 
-| Method | Path                              | Description                                               | Status |
-|--------|-----------------------------------|-----------------------------------------------------------|--------|
-| GET    | `/api/ai-providers`               | List (masked keys, active flag, usage summary)            | ❌     |
-| POST   | `/api/ai-providers`               | Create `{name, type, baseUrl?, apiKey, defaultModel?}`    | ❌     |
-| GET    | `/api/ai-providers/{id}`          | Get one                                                   | ❌     |
-| PUT    | `/api/ai-providers/{id}`          | Update name/baseUrl/apiKey/defaultModel                   | ❌     |
-| DELETE | `/api/ai-providers/{id}`          | Delete (refuse if active? or auto-fallback)               | ❌     |
-| POST   | `/api/ai-providers/{id}/verify`   | Cheap authenticated call (`GET /v1/models` on both types) | ❌     |
-| POST   | `/api/ai-providers/{id}/activate` | Make active                                               | ❌     |
-| GET    | `/api/ai-providers/{id}/models`   | Models the key can use                                    | ❌     |
-| GET    | `/api/ai-providers/{id}/usage`    | Token usage / remaining quota                             | ❌     |
+### AiProviderDto
 
-### Token usage — what's actually possible
+```json
+{
+  "id": 1,
+  "name": "Anthropic main",
+  "type": "ANTHROPIC",
+  "baseUrl": null,
+  "apiKeyMasked": "••••1234",
+  "defaultModel": null,
+  "createdAt": "..."
+}
+```
+
+`baseUrl` optionally points the provider at a custom endpoint implementing the
+Anthropic API (origin only — the SDK appends `/v1/...`; must be a well-formed
+http(s) URL, else `400`). `defaultModel` overrides the built-in fallback for
+generation requests that don't name a model.
+
+### POST /api/ai-providers
+
+```json
+{ "name": "Anthropic main", "type": "ANTHROPIC", "apiKey": "sk-ant-...",
+  "baseUrl": null, "defaultModel": null }
+```
+
+→ `201` [AiProviderDto](#aiproviderdto). `name` and `apiKey` required
+(`400` when blank). `OPENAI_COMPATIBLE` → `501` until that adapter exists.
+
+### PUT /api/ai-providers/{id}
+
+Every field optional; absent or blank `apiKey` keeps the stored key. `null`
+keeps `baseUrl`/`defaultModel`, an empty string clears them (back to the
+provider default / built-in fallback). Unknown id → `404`.
+
+### POST /api/ai-providers/{id}/verify
+
+Calls the provider (a models listing) without persisting anything — there is no
+verify-status machine here; generation works regardless:
+
+```json
+{ "ok": true, "message": "Key valid — 12 models available" }
+```
+
+Failure → `ok: false` with the upstream error in `message` (e.g.
+`"Anthropic API error (401): invalid x-api-key"`). Always `200`.
+
+---
+
+# AI generation
+
+status: ✅
+
+Draft post text with a chosen provider/model. One call produces the generic
+content and any requested per-platform variants; the response mirrors the
+`PostDto` `content`/`overrides` shape so the frontend can drop it straight into
+the post editor.
+
+| Method               | Path              | Description                          | Status |
+|----------------------|-------------------|--------------------------------------|--------|
+| POST                 | `/api/ai/generate`| One-shot generation for a post draft | ✅     |
+| POST                 | `/api/ai/chat`    | Multi-turn refinement conversation   | ❌     |
+
+### POST /api/ai/generate
+
+```json5
+{
+  "prompt": "Post about releasing v2 of our CLI tool",
+  "platforms": ["GENERIC", "X", "REDDIT"],  // optional, default ["GENERIC"]; empty -> 400
+  "constraints": { "maxLength": 500, "tone": "casual" },  // both optional, apply to every variant
+  "providerId": 2,            // optional — required (400) when several providers exist and it's omitted
+  "model": "claude-sonnet-5", // optional — provider.defaultModel -> built-in "claude-sonnet-5"
+  "effort": "LOW"             // optional — LOW | MEDIUM | HIGH | XHIGH | MAX, defaults LOW
+}
+```
+
+→
+
+```json
+{
+  "content":  { "title": "v2 is out", "text": "…master version…" },
+  "overrides": {
+    "X":      { "title": null, "text": "…≤280 chars…" },
+    "REDDIT": { "title": "v2 is out", "text": "…" }
+  },
+  "provider": "Anthropic main",
+  "model": "claude-sonnet-5",
+  "usage": { "inputTokens": 512, "outputTokens": 613 }
+}
+```
+
+Semantics:
+
+- `GENERIC` (a `GeneratePlatform`, alongside `FACEBOOK | REDDIT | X | LINKEDIN`)
+  becomes `content`; the rest become `overrides` keyed by platform. `content`
+  is `null` when `GENERIC` wasn't requested.
+- A `title` appears only on `GENERIC` (optional) and `REDDIT` (required at
+  publish time — Reddit needs one; entries without text are dropped silently).
+- The system prompt (platform rules, the JSON response contract, global
+  constraints) lives entirely server-side; the request carries intent only.
+- The result is **not** auto-saved as a post — the frontend previews, the user
+  edits, then `POST /api/posts` as usual. Unknown `providerId` → `404`; blank
+  `prompt`/empty `platforms` → `400`.
+- Upstream AI failures surface as `502` with the provider's message, same as
+  platform failures (`AiProviderException`); a model answer that isn't the
+  requested JSON is also a `502`.
+
+### Token usage — what's actually possible (planned endpoint)
 
 Honest constraints (worth knowing before building the UI):
 
 - **Every provider returns a `usage` block on each completion** (`input_tokens`,
-  `output_tokens`). We accumulate these per provider locally → reliable
-  "used" numbers, no extra API call.
+  `output_tokens` — already echoed per generate response). Accumulating these
+  per provider locally gives reliable "used" numbers, no extra API call.
 - **"Remaining" is provider-specific and often unavailable.** Anthropic exposes no
   remaining-credit endpoint for standard keys; OpenAI's billing/usage endpoints vary
   by account type; OpenRouter has `/api/v1/credits`.
 
-So the usage endpoint returns a best-effort shape with an explicit source label:
+So the planned usage endpoint returns a best-effort shape with an explicit source label:
 
 ```json
 {
@@ -714,64 +826,3 @@ So the usage endpoint returns a best-effort shape with an explicit source label:
 
 `source: LOCAL` = locally accumulated (always available); `PROVIDER` = live quota
 call succeeded (OpenRouter-style providers only). The UI should label estimates.
-
----
-
-# Planned: AI generation / chat
-
-status: ❌
-
-Generate publication text with a chosen provider/model.
-
-| Method | Path               | Description                          | Status |
-|--------|--------------------|--------------------------------------|--------|
-| POST   | `/api/ai/generate` | One-shot generation for a post draft | ❌     |
-| POST   | `/api/ai/chat`     | Multi-turn refinement conversation   | ❌     |
-
-### POST /api/ai/generate
-
-```json5
-{
-  "prompt": "Post about releasing v2 of our CLI tool",
-  "platform": "FACEBOOK",
-  "constraints": { "maxLength": 500, "needsTitle": false, "tone": "casual" },
-  "providerId": 2,          // optional — defaults to the active provider
-  "model": "claude-sonnet-5" // optional — defaults to provider's defaultModel
-}
-```
-
-→
-
-```json
-{
-  "text": "…generated…",
-  "title": null,
-  "provider": "Anthropic main",
-  "model": "claude-sonnet-5",
-  "usage": { "inputTokens": 512, "outputTokens": 184 }
-}
-```
-
-The result is **not** auto-saved as a post — the frontend previews, the user edits,
-then `POST /api/posts` as usual. `platform`/`constraints` shape the system prompt
-(e.g. Reddit → also produce a title, X → ≤280 chars when X support lands).
-
-### POST /api/ai/chat
-
-Stateless pass-through of the conversation (frontend owns history):
-
-```json
-{
-  "messages": [
-    { "role": "user", "content": "Draft a post about X" },
-    { "role": "assistant", "content": "…" },
-    { "role": "user", "content": "Shorter, add an emoji" }
-  ],
-  "providerId": 2, "model": "claude-sonnet-5"
-}
-```
-
-→ `{ "reply": "…", "provider": "…", "model": "…", "usage": { … } }`
-
-Generation failures surface as `502` with the upstream message (same
-`PlatformException`-style handling as social platforms).

@@ -16,7 +16,6 @@ import com.five9th.smagent.domain.GeneratePlatform
 import com.five9th.smagent.domain.Platform
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
@@ -47,7 +46,14 @@ class AnthropicAdapterTest {
     }
 
     private fun respondWith(raw: String, inputTokens: Long = 11, outputTokens: Long = 7) {
-        whenever(message.content()).thenReturn(listOf(ContentBlock.ofText(TextBlock.builder().text(raw).build())))
+        whenever(message.content()).thenReturn(listOf(
+            ContentBlock.ofText(
+                TextBlock
+                    .builder()
+                    .text(raw)
+                    .citations(null)
+                    .build())
+        ))
         whenever(usage.inputTokens()).thenReturn(inputTokens)
         whenever(usage.outputTokens()).thenReturn(outputTokens)
     }
@@ -127,10 +133,11 @@ class AnthropicAdapterTest {
         verify(messagesClient).create(captor.capture())
         val params = captor.firstValue
 
-        assertEquals("claude-sonnet-5", params.model().value())
+        val actualModel: String = params.model().asString()
+        assertEquals("claude-sonnet-5", actualModel)
         assertEquals(4096L, params.maxTokens())
-        assertEquals(OutputConfig.Effort.HIGH, params.outputConfig().effort())
-        val system = params.system().joinToString("\n") { it.text() }
+        assertEquals(OutputConfig.Effort.HIGH, params.outputConfig().get().effort().get())
+        val system = params.system().get().asString()
         assertTrue(system.contains("Requested keys: GENERIC, REDDIT"))
         assertTrue(!system.contains("280 characters")) // X not requested -> its rule is not offered
         assertTrue(system.contains("\"REDDIT\": {\"title\""))
@@ -146,7 +153,7 @@ class AnthropicAdapterTest {
 
         val system = argumentCaptor<MessageCreateParams>().apply {
             verify(messagesClient).create(capture())
-        }.firstValue.system().joinToString("\n") { it.text() }
+        }.firstValue.system().get().asString()
         assertTrue(!system.contains("280 characters"))
     }
 

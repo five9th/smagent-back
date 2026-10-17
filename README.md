@@ -13,7 +13,9 @@ Current scope (MVP):
 - **Auth:** one owner account, session cookie (HttpOnly, SameSite=Lax)
 - **Publishing:** synchronous "publish now", per-target success/failure;
   by-hand posts recorded via `publish-manual`
-- **Not yet:** AI generation, media upload, scheduling
+- **AI:** post-text generation via a stored AI provider (ANTHROPIC today;
+  OpenAI-compatible planned) — drafts generic + per-platform variants in one call
+- **Not yet:** media upload, scheduling
 
 ## Stack
 
@@ -196,6 +198,11 @@ POST   /api/posts/{id}/publish-manual {accountId, externalUrl?}  record a by-han
 GET    /api/posts/{id}/share-url?accountId=                     prefilled composer URL
 
 GET    /api/publications?postId=                                flat attempt log
+
+GET/POST /api/ai-providers          {name, type, baseUrl?, apiKey, defaultModel?}
+GET/PUT/DELETE /api/ai-providers/{id}
+POST   /api/ai-providers/{id}/verify
+POST   /api/ai/generate             {prompt, platforms?, constraints?, providerId?, model?, effort?}
 ```
 
 `content` is the post's text, optional title and optional share `link` as one
@@ -225,3 +232,8 @@ API-backed options live in `platform/adapter/<platform>/`; the manual
 `PROFILE_URL` option is shared — add a one-line `ProfileUrlAdapter` subclass in
 `platform/adapter/common/` so a new platform is usable before it has API
 access. Dispatch is by (platform, authMethod); nothing else changes.
+
+Same pattern for AI backends: one class implementing `AiProviderAdapter`
+(`type`, `verify`, `generate`) in `ai/adapter/`, dispatched by provider type.
+The system prompt (platform rules + JSON response contract) lives in
+`AnthropicAdapter` and is shared by all provider types.

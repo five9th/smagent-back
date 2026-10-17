@@ -3,9 +3,11 @@ package com.five9th.smagent.ai
 import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.ai.adapter.AnthropicAdapter
 import com.five9th.smagent.domain.AiProviderType
+import com.five9th.smagent.repo.AiProviderRepository
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.kotlin.any
+import org.mockito.kotlin.anyOrNull
 import org.mockito.kotlin.whenever
 import org.springframework.beans.factory.annotation.Autowired
 import org.springframework.boot.test.context.SpringBootTest
@@ -28,8 +30,12 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var anthropicAdapter: AnthropicAdapter
 
+    @Autowired
+    lateinit var providers: AiProviderRepository
+
     @BeforeEach
-    fun stubAdapter() {
+    fun resetState() {
+        providers.deleteAll() // the in-mem H2 persists across tests in this context
         whenever(anthropicAdapter.type).thenReturn(AiProviderType.ANTHROPIC)
     }
 
@@ -182,7 +188,8 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @Test
     fun `verify reports the adapter message`() {
         val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234"}""")
-        whenever(anthropicAdapter.verify(any(), any())).thenReturn("Key valid — 12 models available")
+        // baseUrl may be null (no override) — any() alone excludes nulls
+        whenever(anthropicAdapter.verify(any(), anyOrNull())).thenReturn("Key valid — 12 models available")
 
         mvc.post("/api/ai-providers/{id}/verify", id).andExpect {
             status { isOk() }
@@ -195,7 +202,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @Test
     fun `verify failure surfaces the upstream error`() {
         val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234"}""")
-        whenever(anthropicAdapter.verify(any(), any())).thenThrow(
+        whenever(anthropicAdapter.verify(any(), anyOrNull())).thenThrow(
             AiProviderException("Anthropic API error (401): invalid x-api-key")
         )
 

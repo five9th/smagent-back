@@ -10,6 +10,7 @@ import com.five9th.smagent.domain.AiProviderType
 import com.five9th.smagent.domain.GenerateEffort
 import com.five9th.smagent.domain.GeneratePlatform
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.crypto.CryptoService
 import com.five9th.smagent.repo.AiProviderRepository
 import kotlin.test.assertEquals
 import kotlin.test.assertNull
@@ -28,6 +29,7 @@ import org.springframework.security.test.context.support.WithMockUser
 import org.springframework.test.context.ActiveProfiles
 import org.springframework.test.context.bean.override.mockito.MockitoBean
 import org.springframework.test.web.servlet.MockMvc
+import org.springframework.test.web.servlet.get
 import org.springframework.test.web.servlet.post
 
 @SpringBootTest
@@ -43,6 +45,9 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @Autowired
     lateinit var providers: AiProviderRepository
+
+    @Autowired
+    lateinit var crypto: CryptoService
 
     private val cannedResult = GenerateResult(
         content = GeneratedContent("v2 is out", "master text"),
@@ -63,17 +68,16 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
 
     private fun createProvider(
         name: String = "Anthropic main",
-        defaultModel: String? = null,
+        defaultModel: String = "claude-sonnet-5",
         baseUrl: String? = null,
         type: String = "ANTHROPIC",
     ): Long {
         val extras = buildString {
-            defaultModel?.let { append(""","defaultModel":"$it"""") }
             baseUrl?.let { append(""","baseUrl":"$it"""") }
         }
         val result = mvc.post("/api/ai-providers") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"name":"$name","type":"$type","apiKey":"sk-ant-decrypted-1234"$extras}"""
+            content = """{"name":"$name","type":"$type","apiKey":"sk-ant-decrypted-1234","defaultModel":"$defaultModel"$extras}"""
         }.andReturn()
         return Regex("\"id\":(\\d+)").find(result.response.contentAsString)!!.groupValues[1].toLong()
     }
@@ -136,7 +140,7 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `model resolution - request beats provider default beats built-in constant`() {
+    fun `model resolution - request beats provider default`() {
         createProvider(defaultModel = "claude-opus-5")
 
         // provider defaultModel (request names none)
@@ -145,8 +149,47 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
         generate("""{"prompt":"hi","model":"claude-fable-5-1"}""").andExpect {
             jsonPath("$.model") { value("claude-fable-5-1") }
         }
-        // provider without defaultModel -> built-in constant (covered by the
-        // defaults test above: "claude-sonnet-5")
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `generate without any model resolution is a 400`() {
+        // pre-0.7 rows can exist without a defaultModel (creation now requires
+        // one) — insert one directly and confirm the guard fires
+        val legacy = com.five9th.smagent.domain.AiProvider(
+            name = "Legacy",
+            apiKeyEnc = crypto.encrypt("sk-ant-legacy-1234"),
+        )
+        providers.save(legacy)
+
+        generate("""{"prompt":"hi"}""").andExpect {
+            status { isBadRequest() }
+            jsonPath("$.message") {
+                value("Provider 'Legacy' has no defaultModel — set one (PUT /api/ai-providers/{id}) or pass model in the request")
+            }
+        }
+
+        // an explicit request model still works
+        generate("""{"prompt":"hi","model":"claude-haiku-4-5"}""").andExpect {
+            status { isOk() }
+            jsonPath("$.model") { value("claude-haiku-4-5") }
+        }
+    }
+
+    @Test
+    fun `anonymous cannot list effort levels`() {
+        mvc.get("/api/ai/effort-levels").andExpect { status { isUnauthorized() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `effort levels stub returns the full enum`() {
+        mvc.get("/api/ai/effort-levels").andExpect {
+            status { isOk() }
+            jsonPath("$") {
+                value(org.hamcrest.Matchers.contains("LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"))
+            }
+        }
     }
 
     @WithMockUser(roles = ["OWNER"])

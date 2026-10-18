@@ -134,10 +134,28 @@ class AnthropicAdapterTest {
     }
 
     @Test
+    fun `listModels returns sorted model ids`() {
+        val page = mock<ModelListPage>()
+        whenever(modelsClient.list()).thenReturn(page)
+        val sonnet = mock<ModelInfo>()
+        whenever(sonnet.id()).thenReturn("claude-sonnet-5")
+        val opus = mock<ModelInfo>()
+        whenever(opus.id()).thenReturn("claude-opus-5")
+        whenever(page.items()).thenReturn(listOf(sonnet, opus))
+
+        assertEquals(listOf("claude-opus-5", "claude-sonnet-5"), adapter.listModels("key-1", null))
+    }
+
+    private fun modelInfo(id: String): ModelInfo =
+        mock<ModelInfo>().also { whenever(it.id()).thenReturn(id) }
+
+    @Test
     fun `verify counts the models the key can use`() {
         val page = mock<ModelListPage>()
         whenever(modelsClient.list()).thenReturn(page)
-        whenever(page.items()).thenReturn(listOf(mock<ModelInfo>(), mock<ModelInfo>()))
+        // build the list first: stubbing inside thenReturn's argument nests stubbings
+        val items = listOf(modelInfo("claude-opus-5"), modelInfo("claude-sonnet-5"))
+        whenever(page.items()).thenReturn(items)
 
         assertEquals("Key valid — 2 models available", adapter.verify("key-1", null))
     }
@@ -146,7 +164,8 @@ class AnthropicAdapterTest {
     fun `verify mentions the custom baseUrl when one is set`() {
         val page = mock<ModelListPage>()
         whenever(modelsClient.list()).thenReturn(page)
-        whenever(page.items()).thenReturn(listOf(mock<ModelInfo>()))
+        val items = listOf(modelInfo("claude-opus-5"))
+        whenever(page.items()).thenReturn(items)
 
         assertEquals(
             "Key valid — 1 models available via http://localhost:5001",

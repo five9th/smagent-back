@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.6.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.7.0<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -686,12 +686,13 @@ exists.
 | Method | Path                              | Description                                                        | Status |
 |--------|-----------------------------------|--------------------------------------------------------------------|--------|
 | GET    | `/api/ai-providers`               | List (masked keys), newest first                                   | ✅     |
-| POST   | `/api/ai-providers`               | Create `{name, type, baseUrl?, apiKey, defaultModel?}`             | ✅     |
+| POST   | `/api/ai-providers`               | Create `{name, type, baseUrl?, apiKey, defaultModel}`              | ✅     |
 | GET    | `/api/ai-providers/{id}`          | Get one                                                            | ✅     |
 | PUT    | `/api/ai-providers/{id}`          | Update name/baseUrl/apiKey/defaultModel (all optional)             | ✅     |
 | DELETE | `/api/ai-providers/{id}`          | Hard delete (nothing references a provider yet)                    | ✅     |
 | POST   | `/api/ai-providers/{id}/verify`   | Cheap authenticated call (models listing)                          | ✅     |
-| GET    | `/api/ai-providers/{id}/models`   | Models the key can use                                             | ❌     |
+| GET    | `/api/ai-providers/{id}/models`   | Model ids the key can use (live call) — SPA suggestion list        | ✅     |
+| GET    | `/api/ai-providers/baseurls/{type}` | Well-known API roots per type — SPA baseUrl suggestions          | ✅     |
 | GET    | `/api/ai-providers/{id}/usage`    | Token usage / remaining quota                                      | ❌     |
 
 ### AiProviderDto
@@ -703,7 +704,7 @@ exists.
   "type": "ANTHROPIC",
   "baseUrl": null,
   "apiKeyMasked": "••••1234",
-  "defaultModel": null,
+  "defaultModel": "claude-sonnet-5",
   "createdAt": "..."
 }
 ```
@@ -716,11 +717,11 @@ well-formed http(s) URL (`400` otherwise). **The convention differs by type:**
 `https://api.groq.com/openai/v1`, `http://localhost:11434/v1` (Ollama); absent
 defaults to `https://api.openai.com/v1`.
 
-`defaultModel` overrides the built-in fallback for generation requests that
-don't name a model. **Required for `OPENAI_COMPATIBLE`** (model names are
-provider-specific — `gpt-5.2`, `llama3.1`, `deepseek/...` — so no sensible
-built-in exists); optional for `ANTHROPIC`, which falls back to
-`claude-sonnet-5`.
+`defaultModel` is the model used by generation requests that don't name one.
+**Required on every provider** (model names are provider-specific —
+`claude-sonnet-5`, `gpt-5.2`, `llama3.1`, `deepseek/...` — so there is no
+built-in fallback); `GET /api/ai-providers/{id}/models` lists real ids to pick
+from. On update it can be replaced but never cleared.
 
 ### POST /api/ai-providers
 
@@ -730,16 +731,15 @@ built-in exists); optional for `ANTHROPIC`, which falls back to
   "defaultModel": "deepseek/deepseek-chat" }
 ```
 
-→ `201` [AiProviderDto](#aiproviderdto). `name` and `apiKey` required
-(`400` when blank); `OPENAI_COMPATIBLE` additionally requires `defaultModel`.
+→ `201` [AiProviderDto](#aiproviderdto). `name`, `apiKey` and `defaultModel`
+required (`400` when blank).
 
 ### PUT /api/ai-providers/{id}
 
 Every field optional; absent or blank `apiKey` keeps the stored key. `null`
-keeps `baseUrl`/`defaultModel`, an empty string clears them (back to the
-provider default / built-in fallback) — except `defaultModel` on an
-`OPENAI_COMPATIBLE` provider, which cannot be cleared, only replaced (`400`).
-Unknown id → `404`.
+keeps `baseUrl`/`defaultModel`, an empty string clears `baseUrl` (back to the
+type's default) — but `defaultModel` can only be replaced, never cleared
+(`400`). Unknown id → `404`.
 
 ### POST /api/ai-providers/{id}/verify
 
@@ -753,6 +753,40 @@ verify-status machine here; generation works regardless:
 Failure → `ok: false` with the upstream error in `message` (e.g.
 `"Anthropic API error (401): invalid x-api-key"`). Always `200`.
 
+### GET /api/ai-providers/{id}/models
+
+The same live models listing verify uses, returned as a sorted array of model
+ids for the SPA's suggestion list (also handy when picking `defaultModel`):
+
+```json
+["claude-opus-5", "claude-sonnet-5"]
+```
+
+Unknown id → `404`; upstream failure → `502` with the provider's message. Note
+that minimal custom endpoints may implement generation but not the models
+listing — such a provider fails here (and on verify) while `/generate` works.
+
+### GET /api/ai-providers/baseurls/{type}
+
+Static catalog of well-known API roots (`{provider:url}`) for the SPA's
+baseUrl suggestion list — also the machine-readable doc of the per-type
+convention (see [AiProviderDto](#aiproviderdto)):
+
+```json
+// ANTHROPIC — origin only, /v1 is appended automatically
+{ "Anthropic": "https://api.anthropic.com" }
+
+// OPENAI_COMPATIBLE — full root including the version path
+{ "OpenAI": "https://api.openai.com/v1",
+  "OpenRouter": "https://openrouter.ai/api/v1",
+  "Groq": "https://api.groq.com/openai/v1",
+  "Mistral": "https://api.mistral.ai/v1",
+  "DeepSeek": "https://api.deepseek.com/v1",
+  "Ollama (local)": "http://localhost:11434/v1" }
+```
+
+Unknown type → `400`.
+
 ---
 
 # AI generation
@@ -764,10 +798,11 @@ content and any requested per-platform variants; the response mirrors the
 `PostDto` `content`/`overrides` shape so the frontend can drop it straight into
 the post editor.
 
-| Method               | Path              | Description                          | Status |
-|----------------------|-------------------|--------------------------------------|--------|
-| POST                 | `/api/ai/generate`| One-shot generation for a post draft | ✅     |
-| POST                 | `/api/ai/chat`    | Multi-turn refinement conversation   | ❌     |
+| Method               | Path                   | Description                            | Status |
+|----------------------|------------------------|----------------------------------------|--------|
+| POST                 | `/api/ai/generate`     | One-shot generation for a post draft   | ✅     |
+| GET                  | `/api/ai/effort-levels`| Effort levels for the picker (stub)    | ✅     |
+| POST                 | `/api/ai/chat`         | Multi-turn refinement conversation     | ❌     |
 
 ### POST /api/ai/generate
 
@@ -777,11 +812,10 @@ the post editor.
   "platforms": ["GENERIC", "X", "REDDIT"],  // optional, default ["GENERIC"]; empty -> 400
   "constraints": { "maxLength": 500, "tone": "casual" },  // both optional, apply to every variant
   "providerId": 2,            // optional — required (400) when several providers exist and it's omitted
-  "model": "claude-sonnet-5", // optional — provider.defaultModel -> built-in "claude-sonnet-5" (ANTHROPIC only;
-                              //   OPENAI_COMPATIBLE providers always carry a defaultModel)
+  "model": "claude-sonnet-5", // optional — falls back to provider.defaultModel (required on every
+                              //   provider, so generation never needs a built-in fallback)
   "effort": "LOW"             // optional — LOW | MEDIUM | HIGH | XHIGH | MAX, defaults LOW.
                               //   ANTHROPIC only for now — not sent to OPENAI_COMPATIBLE endpoints
-
 }
 ```
 
@@ -812,10 +846,23 @@ Semantics:
   type; the request carries intent only.
 - The result is **not** auto-saved as a post — the frontend previews, the user
   edits, then `POST /api/posts` as usual. Unknown `providerId` → `404`; blank
-  `prompt`/empty `platforms` → `400`.
+  `prompt`/empty `platforms` → `400`. A provider without a `defaultModel`
+  (only possible for rows created before it became required) and no request
+  `model` → `400` naming the provider.
 - Upstream AI failures surface as `502` with the provider's message, same as
   platform failures (`AiProviderException`); a model answer that isn't the
   requested JSON is also a `502`.
+
+### GET /api/ai/effort-levels
+
+Stub for the SPA's effort picker — the full enum, same list for every model:
+
+```json
+["LOW", "MEDIUM", "HIGH", "XHIGH", "MAX"]
+```
+
+Later this can map a model to the values it actually supports; query params
+(`providerId`/`model`) would be additive to the stub shape.
 
 ### Token usage — what's actually possible (planned endpoint)
 

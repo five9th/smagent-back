@@ -5,7 +5,6 @@ import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.common.NotFoundException
 import com.five9th.smagent.crypto.CryptoService
 import com.five9th.smagent.domain.AiProvider
-import com.five9th.smagent.domain.AiProviderType
 import com.five9th.smagent.repo.AiProviderRepository
 import org.springframework.stereotype.Service
 import java.net.URI
@@ -29,10 +28,9 @@ class AiProviderService(
     fun create(request: CreateAiProviderRequest): AiProviderDto {
         val baseUrl = request.baseUrl?.trim()?.takeIf { it.isNotEmpty() }?.also(::requireHttpUrl)
         val defaultModel = request.defaultModel?.trim()?.takeIf { it.isNotEmpty() }
-        // model names are provider-specific (gpt-5.2 / llama3.1 / deepseek/...) — no sensible built-in fallback
-        if (request.type == AiProviderType.OPENAI_COMPATIBLE && defaultModel == null) {
-            throw IllegalArgumentException("defaultModel is required for OPENAI_COMPATIBLE providers")
-        }
+        // model names are provider-specific (gpt-5.2 / llama3.1 / claude-sonnet-5...) — every
+        // provider carries its own default; the models endpoint suggests real ids
+        requireNotNull(defaultModel) { "defaultModel is required (see GET /api/ai-providers/{id}/models for suggestions)" }
         val provider = AiProvider(
             name = request.name!!.trim(),
             type = request.type,
@@ -52,11 +50,7 @@ class AiProviderService(
         request.apiKey?.takeIf { it.isNotBlank() }?.let { provider.apiKeyEnc = crypto.encrypt(it) }
         request.defaultModel?.let {
             val newModel = it.trim().takeIf { m -> m.isNotEmpty() }
-            if (provider.type == AiProviderType.OPENAI_COMPATIBLE && newModel == null) {
-                throw IllegalArgumentException(
-                    "defaultModel is required for OPENAI_COMPATIBLE providers — pass a new model instead of clearing it"
-                )
-            }
+                ?: throw IllegalArgumentException("defaultModel cannot be cleared — pass a new model instead")
             provider.defaultModel = newModel
         }
         return toDto(providers.save(provider))
@@ -82,6 +76,13 @@ class AiProviderService(
         } catch (e: AiProviderException) {
             VerifyAiProviderResponse(ok = false, message = e.message ?: "Verification failed")
         }
+    }
+
+    /** Live model listing for the SPA's model suggestion list. */
+    fun listModels(id: Long): List<String> {
+        val provider = get(id)
+        return registry.get(provider.type)
+            .listModels(crypto.decrypt(provider.apiKeyEnc), provider.baseUrl)
     }
 
     private fun requireHttpUrl(value: String) {

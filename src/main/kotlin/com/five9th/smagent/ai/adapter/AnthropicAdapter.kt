@@ -30,10 +30,14 @@ class AnthropicAdapter : AiProviderAdapter {
         builder.build()
     }
 
-    override fun verify(apiKey: String, baseUrl: String?): String {
-        val models = call(clientFactory(apiKey, baseUrl)) { it.models().list().items() }
-        return "Key valid — ${models.size} models available" + (baseUrl?.let { " via $it" } ?: "")
-    }
+    override fun listModels(apiKey: String, baseUrl: String?): List<String> =
+        call(clientFactory(apiKey, baseUrl)) { it.models().list().items() }
+            .mapNotNull { it.id() }
+            .sorted()
+
+    override fun verify(apiKey: String, baseUrl: String?): String =
+        "Key valid — ${listModels(apiKey, baseUrl).size} models available" +
+            (baseUrl?.let { " via $it" } ?: "")
 
     override fun generate(
         apiKey: String,

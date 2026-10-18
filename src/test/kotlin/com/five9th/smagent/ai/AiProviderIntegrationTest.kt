@@ -80,14 +80,13 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `create without baseUrl or defaultModel leaves them null`() {
+    fun `create without baseUrl leaves it null`() {
         mvc.post("/api/ai-providers") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"name":"Plain","type":"ANTHROPIC","apiKey":"short"}"""
+            content = """{"name":"Plain","type":"ANTHROPIC","apiKey":"short","defaultModel":"claude-sonnet-5"}"""
         }.andExpect {
             status { isCreated() }
             jsonPath("$.baseUrl") { doesNotExist() }
-            jsonPath("$.defaultModel") { doesNotExist() }
             jsonPath("$.apiKeyMasked") { value("••••") } // too short for a tail
         }
     }
@@ -113,13 +112,17 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `create OPENAI_COMPATIBLE without defaultModel returns 400`() {
-        mvc.post("/api/ai-providers") {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"name":"OpenRouter","type":"OPENAI_COMPATIBLE","apiKey":"sk-or-1"}"""
-        }.andExpect {
-            status { isBadRequest() }
-            jsonPath("$.message") { value("defaultModel is required for OPENAI_COMPATIBLE providers") }
+    fun `create without defaultModel returns 400 for every type`() {
+        listOf("ANTHROPIC", "OPENAI_COMPATIBLE").forEach { type ->
+            mvc.post("/api/ai-providers") {
+                contentType = MediaType.APPLICATION_JSON
+                content = """{"name":"X","type":"$type","apiKey":"sk-some-key"}"""
+            }.andExpect {
+                status { isBadRequest() }
+                jsonPath("$.message") {
+                    value("defaultModel is required (see GET /api/ai-providers/{id}/models for suggestions)")
+                }
+            }
         }
     }
 
@@ -129,7 +132,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
         listOf("not a url", "ftp://example.com").forEach { url ->
             mvc.post("/api/ai-providers") {
                 contentType = MediaType.APPLICATION_JSON
-                content = """{"name":"X","type":"ANTHROPIC","apiKey":"k","baseUrl":"$url"}"""
+                content = """{"name":"X","type":"ANTHROPIC","apiKey":"k","defaultModel":"m","baseUrl":"$url"}"""
             }.andExpect { status { isBadRequest() } }
         }
     }
@@ -151,7 +154,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @WithMockUser(roles = ["OWNER"])
     @Test
     fun `list returns created providers`() {
-        createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-verylongtoken-1234"}""")
+        createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-verylongtoken-1234","defaultModel":"claude-sonnet-5"}""")
 
         mvc.get("/api/ai-providers").andExpect {
             status { isOk() }
@@ -169,7 +172,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @WithMockUser(roles = ["OWNER"])
     @Test
     fun `update renames, replaces the key and keeps it when blank`() {
-        val id = createProvider("""{"name":"Old name","type":"ANTHROPIC","apiKey":"sk-ant-verylongtoken-1234"}""")
+        val id = createProvider("""{"name":"Old name","type":"ANTHROPIC","apiKey":"sk-ant-verylongtoken-1234","defaultModel":"claude-sonnet-5"}""")
 
         mvc.put("/api/ai-providers/{id}", id) {
             contentType = MediaType.APPLICATION_JSON
@@ -192,7 +195,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `update clears baseUrl and defaultModel with empty strings`() {
+    fun `update clears baseUrl with an empty string but not defaultModel`() {
         val id = createProvider(
             """{"name":"X","type":"ANTHROPIC","apiKey":"k",
                "baseUrl":"http://localhost:5001","defaultModel":"claude-sonnet-5"}"""
@@ -200,33 +203,31 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
 
         mvc.put("/api/ai-providers/{id}", id) {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"baseUrl":"","defaultModel":""}"""
+            content = """{"baseUrl":""}"""
         }.andExpect {
             status { isOk() }
             jsonPath("$.baseUrl") { doesNotExist() }
-            jsonPath("$.defaultModel") { doesNotExist() }
+            jsonPath("$.defaultModel") { value("claude-sonnet-5") }
         }
-    }
-
-    @WithMockUser(roles = ["OWNER"])
-    @Test
-    fun `update refuses clearing defaultModel on OPENAI_COMPATIBLE`() {
-        val id = createProvider(
-            """{"name":"OpenRouter","type":"OPENAI_COMPATIBLE","apiKey":"k",
-               "baseUrl":"https://openrouter.ai/api/v1","defaultModel":"deepseek/deepseek-chat"}"""
-        )
 
         mvc.put("/api/ai-providers/{id}", id) {
             contentType = MediaType.APPLICATION_JSON
             content = """{"defaultModel":""}"""
         }.andExpect {
             status { isBadRequest() }
-            jsonPath("$.message") {
-                value("defaultModel is required for OPENAI_COMPATIBLE providers — pass a new model instead of clearing it")
-            }
+            jsonPath("$.message") { value("defaultModel cannot be cleared — pass a new model instead") }
         }
+    }
 
-        // replacing (not clearing) stays fine
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `update replaces defaultModel but never clears it`() {
+        val id = createProvider(
+            """{"name":"OpenRouter","type":"OPENAI_COMPATIBLE","apiKey":"k",
+               "baseUrl":"https://openrouter.ai/api/v1","defaultModel":"deepseek/deepseek-chat"}"""
+        )
+
+        // replacing stays fine
         mvc.put("/api/ai-providers/{id}", id) {
             contentType = MediaType.APPLICATION_JSON
             content = """{"defaultModel":"openai/gpt-5.2"}"""
@@ -255,7 +256,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @WithMockUser(roles = ["OWNER"])
     @Test
     fun `verify reports the adapter message`() {
-        val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234"}""")
+        val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234","defaultModel":"claude-sonnet-5"}""")
         // baseUrl may be null (no override) — any() alone excludes nulls
         whenever(anthropicAdapter.verify(any(), anyOrNull())).thenReturn("Key valid — 12 models available")
 
@@ -269,7 +270,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @WithMockUser(roles = ["OWNER"])
     @Test
     fun `verify failure surfaces the upstream error`() {
-        val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234"}""")
+        val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234","defaultModel":"claude-sonnet-5"}""")
         whenever(anthropicAdapter.verify(any(), anyOrNull())).thenThrow(
             AiProviderException("Anthropic API error (401): invalid x-api-key")
         )
@@ -283,8 +284,55 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
+    fun `models endpoint returns the adapter's listing`() {
+        val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234","defaultModel":"claude-sonnet-5"}""")
+        whenever(anthropicAdapter.listModels(any(), anyOrNull()))
+            .thenReturn(listOf("claude-opus-5", "claude-sonnet-5"))
+
+        mvc.get("/api/ai-providers/{id}/models", id).andExpect {
+            status { isOk() }
+            jsonPath("$[0]") { value("claude-opus-5") }
+            jsonPath("$[1]") { value("claude-sonnet-5") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `models endpoint failures surface as 502`() {
+        val id = createProvider("""{"name":"Anthropic main","type":"ANTHROPIC","apiKey":"sk-ant-token-1234","defaultModel":"claude-sonnet-5"}""")
+        whenever(anthropicAdapter.listModels(any(), anyOrNull())).thenThrow(
+            AiProviderException("Anthropic API error (401): invalid x-api-key")
+        )
+
+        mvc.get("/api/ai-providers/{id}/models", id).andExpect {
+            status { isBadGateway() }
+            jsonPath("$.message") { value("Anthropic API error (401): invalid x-api-key") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `baseurls catalog returns known roots per type`() {
+        mvc.get("/api/ai-providers/baseurls/ANTHROPIC").andExpect {
+            status { isOk() }
+            jsonPath("$.Anthropic") { value("https://api.anthropic.com") }
+        }
+
+        mvc.get("/api/ai-providers/baseurls/OPENAI_COMPATIBLE").andExpect {
+            status { isOk() }
+            jsonPath("$.OpenAI") { value("https://api.openai.com/v1") }
+            jsonPath("$.OpenRouter") { value("https://openrouter.ai/api/v1") }
+            jsonPath("$.Groq") { value("https://api.groq.com/openai/v1") }
+            jsonPath("$['Ollama (local)']") { value("http://localhost:11434/v1") }
+        }
+
+        mvc.get("/api/ai-providers/baseurls/BOGUS").andExpect { status { isBadRequest() } }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
     fun `delete removes the provider for real`() {
-        val id = createProvider("""{"name":"X","type":"ANTHROPIC","apiKey":"k"}""")
+        val id = createProvider("""{"name":"X","type":"ANTHROPIC","apiKey":"k","defaultModel":"m"}""")
         mvc.delete("/api/ai-providers/{id}", id).andExpect { status { isNoContent() } }
         mvc.get("/api/ai-providers/{id}", id).andExpect { status { isNotFound() } }
     }

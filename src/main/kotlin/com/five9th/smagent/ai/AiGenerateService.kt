@@ -28,8 +28,10 @@ class AiGenerateService(
             ?: setOf(GeneratePlatform.GENERIC)
         val provider = request.providerId?.let { providerService.get(it) } ?: inferProvider()
         val model = request.model?.trim()?.takeIf { it.isNotEmpty() }
-            ?: provider.defaultModel
-            ?: DEFAULT_MODEL
+            ?: provider.defaultModel?.takeIf { it.isNotBlank() }
+            ?: throw IllegalArgumentException(
+                "Provider '${provider.name}' has no defaultModel — set one (PUT /api/ai-providers/{id}) or pass model in the request"
+            )
 
         val result = registry.get(provider.type).generate(
             apiKey = crypto.decrypt(provider.apiKeyEnc),
@@ -62,14 +64,5 @@ class AiGenerateService(
             all.size == 1 -> all[0]
             else -> throw IllegalArgumentException("Several AI providers exist — pass providerId to choose one")
         }
-    }
-
-    companion object {
-        /**
-         * Fallback when an ANTHROPIC provider has no defaultModel. OPENAI_COMPATIBLE
-         * providers always carry one (enforced on create/update — model names are
-         * provider-specific, no sensible constant exists).
-         */
-        const val DEFAULT_MODEL = "claude-sonnet-5"
     }
 }

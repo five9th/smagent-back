@@ -138,10 +138,30 @@ class OpenAiCompatibleAdapterTest {
     }
 
     @Test
+    fun `listModels returns sorted model ids`() {
+        val page = mock<ModelListPage>()
+        whenever(modelsService.list()).thenReturn(page)
+        val llama = mock<Model>()
+        whenever(llama.id()).thenReturn("meta-llama/llama-3.1-405b-instruct")
+        val deepseek = mock<Model>()
+        whenever(deepseek.id()).thenReturn("deepseek/deepseek-chat")
+        whenever(page.items()).thenReturn(listOf(llama, deepseek))
+
+        assertEquals(
+            listOf("deepseek/deepseek-chat", "meta-llama/llama-3.1-405b-instruct"),
+            adapter.listModels("key-1", null),
+        )
+    }
+
+    @Test
     fun `verify counts the models the key can use`() {
         val page = mock<ModelListPage>()
         whenever(modelsService.list()).thenReturn(page)
-        whenever(page.items()).thenReturn(listOf(mock<Model>(), mock<Model>()))
+        val m1 = mock<Model>()
+        whenever(m1.id()).thenReturn("deepseek/deepseek-chat")
+        val m2 = mock<Model>()
+        whenever(m2.id()).thenReturn("openai/gpt-5.2")
+        whenever(page.items()).thenReturn(listOf(m1, m2))
 
         assertEquals(
             "Key valid — 2 models available via https://openrouter.ai/api/v1",

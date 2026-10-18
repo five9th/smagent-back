@@ -36,4 +36,12 @@ class AiProviderController(private val service: AiProviderService) {
 
     @PostMapping("/{id}/verify")
     fun verify(@PathVariable id: Long): VerifyAiProviderResponse = service.verify(id)
+
+    /** Well-known API roots for the SPA's baseUrl suggestion list. */
+    @GetMapping("/baseurls/{type}")
+    fun baseUrls(@PathVariable type: String): Map<String, String> = AiBaseUrls.forType(type)
+
+    /** Model ids the provider's key can use (live call). */
+    @GetMapping("/{id}/models")
+    fun models(@PathVariable id: Long): List<String> = service.listModels(id)
 }

@@ -15,7 +15,14 @@ interface AiProviderAdapter {
     val type: AiProviderType
 
     /**
-     * Cheap authenticated probe (e.g. a model listing). Returns a
+     * Model ids the key can use, sorted — feeds both verify's message and
+     * GET /api/ai-providers/{id}/models. Throws [AiProviderException] on
+     * upstream failure.
+     */
+    fun listModels(apiKey: String, baseUrl: String?): List<String>
+
+    /**
+     * Cheap authenticated probe on top of [listModels]. Returns a
      * human-readable success message; throws [AiProviderException] on
      * upstream failure.
      */

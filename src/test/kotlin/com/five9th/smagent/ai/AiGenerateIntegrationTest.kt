@@ -136,6 +136,33 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
         assertEquals("Post about v2", command.firstValue.prompt)
         assertEquals(setOf(GeneratePlatform.GENERIC), command.firstValue.platforms)
         assertNull(command.firstValue.constraints)
+        assertNull(command.firstValue.editorState)
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `generate passes the editor state through to the command`() {
+        createProvider()
+
+        generate(
+            """
+            {"prompt":"make the X version shorter",
+             "platforms":["GENERIC","X"],
+             "editorState":{
+               "GENERIC":{"title":"v2","text":"master text","link":"https://example.com/v2"},
+               "X":{"text":"current x text"}}}
+            """.trimIndent()
+        ).andExpect { status { isOk() } }
+
+        val command = argumentCaptor<GenerateCommand>()
+        verify(anthropicAdapter).generate(any(), anyOrNull(), any(), any(), command.capture())
+        assertEquals(
+            mapOf(
+                GeneratePlatform.GENERIC to com.five9th.smagent.domain.PostContent("v2", "master text", "https://example.com/v2"),
+                GeneratePlatform.X to com.five9th.smagent.domain.PostContent(text = "current x text"),
+            ),
+            command.firstValue.editorState,
+        )
     }
 
     @WithMockUser(roles = ["OWNER"])

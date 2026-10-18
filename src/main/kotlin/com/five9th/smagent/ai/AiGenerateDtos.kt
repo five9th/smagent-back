@@ -4,6 +4,7 @@ import com.five9th.smagent.ai.adapter.GenerateConstraints
 import com.five9th.smagent.domain.GenerateEffort
 import com.five9th.smagent.domain.GeneratePlatform
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.domain.PostContent
 import jakarta.validation.constraints.NotBlank
 
 data class GenerateRequest(
@@ -11,9 +12,16 @@ data class GenerateRequest(
     /** Variants to produce; null = ["GENERIC"]; an explicit empty set is rejected. */
     val platforms: Set<GeneratePlatform>? = null,
     val constraints: GenerateConstraints? = null,
+    /**
+     * Current post editor state (GENERIC = the post's own content) — when set,
+     * the model edits this draft per the prompt instead of drafting from
+     * scratch. Entries with blank text are ignored; keys outside [platforms]
+     * are context only. The response is still full replacements.
+     */
+    val editorState: Map<GeneratePlatform, PostContent>? = null,
     /** Defaults to the only provider; required when several exist. */
     val providerId: Long? = null,
-    /** Defaults to the provider's defaultModel, then the built-in constant. */
+    /** Defaults to the provider's defaultModel. */
     val model: String? = null,
     val effort: GenerateEffort? = null,
 )

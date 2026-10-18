@@ -42,6 +42,7 @@ class AiGenerateService(
                 prompt = request.prompt!!.trim(),
                 platforms = platforms,
                 constraints = request.constraints,
+                editorState = request.editorState,
             ),
         )
         return GenerateResponse(

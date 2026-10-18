@@ -50,7 +50,7 @@ class AnthropicAdapter : AiProviderAdapter {
             .model(model)
             .maxTokens(MAX_TOKENS)
             .system(GenerationContract.systemPrompt(command))
-            .addUserMessage(command.prompt)
+            .addUserMessage(GenerationContract.userMessage(command))
             .outputConfig(OutputConfig.builder().effort(effort.toSdk()).build())
             .build()
         val message = call(clientFactory(apiKey, baseUrl)) { it.messages().create(params) }

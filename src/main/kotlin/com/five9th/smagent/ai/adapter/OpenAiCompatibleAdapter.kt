@@ -51,7 +51,7 @@ class OpenAiCompatibleAdapter : AiProviderAdapter {
             .model(model)
             .maxCompletionTokens(MAX_TOKENS)
             .addSystemMessage(GenerationContract.systemPrompt(command))
-            .addUserMessage(command.prompt)
+            .addUserMessage(GenerationContract.userMessage(command))
             // TODO effort: map to reasoningEffort. Only reasoning models accept it and
             //  heterogeneous compatible endpoints reject unknown params, so it is never
             //  sent today — decide a mapping (send only above LOW, clamp XHIGH/MAX?) later.

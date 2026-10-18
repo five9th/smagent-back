@@ -78,7 +78,7 @@ class AnthropicAdapterTest {
     fun `generate maps a model answer into content, overrides and usage`() {
         respondWith(
             """
-            {"GENERIC":{"title":"v2 is out","text":"master text"},
+            {"GENERIC":{"title":"dropped: REDDIT is requested","text":"master text"},
              "REDDIT":{"title":"v2","text":"community text"},
              "X":{"title":"ignored","text":"short one"}}
             """.trimIndent()
@@ -86,7 +86,7 @@ class AnthropicAdapterTest {
 
         val result = generate(GeneratePlatform.GENERIC, GeneratePlatform.REDDIT, GeneratePlatform.X)
 
-        assertEquals(GeneratedContent("v2 is out", "master text"), result.content)
+        assertEquals(GeneratedContent(null, "master text"), result.content)
         assertEquals(GeneratedContent("v2", "community text"), result.overrides[Platform.REDDIT])
         assertEquals(GeneratedContent(null, "short one"), result.overrides[Platform.X])
         assertEquals(11L, result.inputTokens)

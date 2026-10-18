@@ -4,6 +4,7 @@ import com.five9th.smagent.domain.AiProviderType
 import com.five9th.smagent.domain.GenerateEffort
 import com.five9th.smagent.domain.GeneratePlatform
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.domain.PostContent
 
 /**
  * One implementation per [AiProviderType]; Spring injects all implementations
@@ -38,12 +39,18 @@ interface AiProviderAdapter {
     ): GenerateResult
 }
 
-/** What to draft: the user prompt, the requested variants, optional global constraints. */
+/** What to draft: the user prompt, the requested variants, optional global constraints, optional current draft. */
 data class GenerateCommand(
     val prompt: String,
     /** Which entries to produce; GENERIC becomes `content`, the rest `overrides`. */
     val platforms: Set<GeneratePlatform>,
     val constraints: GenerateConstraints? = null,
+    /**
+     * Current state of the post editor (GENERIC = the post's own content) —
+     * lets the model edit the existing draft instead of starting from zero.
+     * Blank-text entries are ignored when building the prompt.
+     */
+    val editorState: Map<GeneratePlatform, PostContent>? = null,
 )
 
 data class GenerateConstraints(

@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.7.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.8.0<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -766,6 +766,12 @@ Unknown id → `404`; upstream failure → `502` with the provider's message. No
 that minimal custom endpoints may implement generation but not the models
 listing — such a provider fails here (and on verify) while `/generate` works.
 
+**SPA flow for picking the default model** — the same two-step trick as the
+OAuth token flows: create the provider with the real key and a *placeholder*
+`defaultModel` (any non-blank string; creation only requires one to exist),
+then call this endpoint for the new provider and let the user pick the actual
+default from the listing, saving the choice with `PUT /api/ai-providers/{id}`.
+
 ### GET /api/ai-providers/baseurls/{type}
 
 Static catalog of well-known API roots (`{provider:url}`) for the SPA's
@@ -811,6 +817,10 @@ the post editor.
   "prompt": "Post about releasing v2 of our CLI tool",
   "platforms": ["GENERIC", "X", "REDDIT"],  // optional, default ["GENERIC"]; empty -> 400
   "constraints": { "maxLength": 500, "tone": "casual" },  // both optional, apply to every variant
+  "editorState": {                            // optional — current editor state; the AI edits this
+    "GENERIC": { "title": "…", "text": "…", "link": "…" },   // draft instead of starting from zero
+    "X": { "text": "…" }
+  },
   "providerId": 2,            // optional — required (400) when several providers exist and it's omitted
   "model": "claude-sonnet-5", // optional — falls back to provider.defaultModel (required on every
                               //   provider, so generation never needs a built-in fallback)
@@ -839,11 +849,21 @@ Semantics:
 - `GENERIC` (a `GeneratePlatform`, alongside `FACEBOOK | REDDIT | X | LINKEDIN`)
   becomes `content`; the rest become `overrides` keyed by platform. `content`
   is `null` when `GENERIC` wasn't requested.
-- A `title` appears only on `GENERIC` (optional) and `REDDIT` (required at
-  publish time — Reddit needs one; entries without text are dropped silently).
+- A `title` appears only where it can be used: `REDDIT` entries always carry
+  one (Reddit requires it at publish time), and `GENERIC` carries one only when
+  `REDDIT` is **not** among the requested variants — then the generic text is
+  the fallback for a possible later Reddit publish. The model is explicitly
+  told that only Reddit displays a title, so every other text must stand on
+  its own.
 - The system prompt (platform rules, the JSON response contract, global
   constraints) lives entirely server-side and is identical for every provider
-  type; the request carries intent only.
+  type; the request carries intent (and, via `editorState`, the draft) only.
+- `editorState` entries are the current `PostContent` per platform (`GENERIC` =
+  the post's own content). Entries with blank text are ignored; keys outside
+  `platforms` are context only. The model is instructed to return **full
+  replacements** for the requested keys, never diffs — the response shape is
+  unchanged. A `link` is passed as context, and the model is told not to
+  repeat the URL in the texts (publishing appends it).
 - The result is **not** auto-saved as a post — the frontend previews, the user
   edits, then `POST /api/posts` as usual. Unknown `providerId` → `404`; blank
   `prompt`/empty `platforms` → `400`. A provider without a `defaultModel`

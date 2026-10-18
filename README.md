@@ -1,6 +1,6 @@
 # SMAgent
 
-Version: <!-- gradle:version -->0.7.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.8.0<!-- /gradle:version -->
 
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a
@@ -206,7 +206,7 @@ POST   /api/ai-providers/{id}/verify
 GET    /api/ai-providers/{id}/models                          live model listing (SPA suggestions)
 GET    /api/ai-providers/baseurls/{type}                      well-known API roots per type
 GET    /api/ai/effort-levels                                  effort values for the picker (stub)
-POST   /api/ai/generate             {prompt, platforms?, constraints?, providerId?, model?, effort?}
+POST   /api/ai/generate             {prompt, platforms?, constraints?, editorState?, providerId?, model?, effort?}
 ```
 
 `content` is the post's text, optional title and optional share `link` as one

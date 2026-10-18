@@ -2,14 +2,16 @@ package com.five9th.smagent.ai.adapter
 
 import com.five9th.smagent.domain.GeneratePlatform
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.domain.PostContent
 import tools.jackson.databind.JsonNode
 import tools.jackson.databind.json.JsonMapper
 
 /**
  * The provider-agnostic response contract shared by all [AiProviderAdapter]s:
- * the system prompt (platform rules + the exact JSON shape + constraints) and
- * the lenient parse of the model's answer. Adapters keep only SDK plumbing —
- * model/param mapping and error wrapping.
+ * the system prompt (platform rules + the exact JSON shape + constraints),
+ * the user message (optional current draft + the request), and the lenient
+ * parse of the model's answer. Adapters keep only SDK plumbing — model/param
+ * mapping and error wrapping.
  */
 internal object GenerationContract {
 
@@ -17,8 +19,9 @@ internal object GenerationContract {
 
     /**
      * The whole response contract lives here: requested keys, entry shapes
-     * (title only on GENERIC and REDDIT — Reddit requires one at publish
-     * time), per-platform rules, and the global constraints.
+     * (title only where it can be used — see [genericNeedsTitle]), per-platform
+     * rules, the edit contract when a draft is provided, and the global
+     * constraints.
      */
     fun systemPrompt(command: GenerateCommand): String = buildString {
         appendLine("You draft social media posts for a single owner publishing to their own accounts.")
@@ -28,7 +31,11 @@ internal object GenerationContract {
         appendLine()
         appendLine("Entry shapes and rules:")
         if (GeneratePlatform.GENERIC in command.platforms) {
-            appendLine("- \"GENERIC\": {\"title\": <string or null>, \"text\": <string>} — the master version other platforms fall back to. Set \"title\" only when it meaningfully helps (it becomes the post title on Reddit); otherwise null.")
+            if (genericNeedsTitle(command.platforms)) {
+                appendLine("- \"GENERIC\": {\"title\": <string>, \"text\": <string>} — the master version other platforms fall back to. The title is REQUIRED: this text may later be published to Reddit, which displays one.")
+            } else {
+                appendLine("- \"GENERIC\": {\"text\": <string>} — the master version other platforms fall back to. No title: the requested REDDIT entry carries its own.")
+            }
         }
         command.platforms.forEach { platform ->
             when (platform) {
@@ -41,6 +48,15 @@ internal object GenerationContract {
                 GeneratePlatform.LINKEDIN ->
                     appendLine("- \"LINKEDIN\": {\"text\": <string>} — professional and clear, no hashtag spam. No title.")
                 GeneratePlatform.GENERIC -> {} // described above
+            }
+        }
+        appendLine()
+        appendLine("Titles: only Reddit displays one — every other platform shows the text alone. The text of any entry except REDDIT must stand on its own, never relying on a title to carry meaning.")
+        draftEntries(command)?.let { draft ->
+            appendLine()
+            appendLine("A current draft is provided with the request. Treat the request as an edit of that draft and return the complete updated entries for the requested keys — full replacements, never diffs.")
+            if (draft.values.any { !it.link.isNullOrBlank() }) {
+                appendLine("Draft entries may carry a \"link\" — context for what the post is about. Do not repeat that URL in any text; publishing appends it automatically.")
             }
         }
         command.constraints?.let { c ->
@@ -57,11 +73,52 @@ internal object GenerationContract {
     }
 
     /**
+     * The user turn: the sanitized current draft (when provided) as context,
+     * then the request. Volatile per-request data stays out of the system
+     * prompt on purpose.
+     */
+    fun userMessage(command: GenerateCommand): String {
+        val draft = draftEntries(command) ?: return command.prompt
+        return buildString {
+            appendLine("Current draft:")
+            appendLine(renderDraft(draft))
+            appendLine()
+            append("Request: ${command.prompt}")
+        }
+    }
+
+    /**
+     * Whether the GENERIC entry carries a title: only when no REDDIT variant
+     * is requested (that variant brings its own title, and without it the
+     * generic text is the fallback for a possible later Reddit publish).
+     */
+    private fun genericNeedsTitle(platforms: Set<GeneratePlatform>): Boolean =
+        GeneratePlatform.GENERIC in platforms && GeneratePlatform.REDDIT !in platforms
+
+    /** Draft entries with actual text; blank-text entries are context noise and dropped. */
+    private fun draftEntries(command: GenerateCommand): Map<GeneratePlatform, PostContent>? =
+        command.editorState
+            ?.takeIf { it.isNotEmpty() }
+            ?.filterValues { it.text.isNotBlank() }
+            ?.takeIf { it.isNotEmpty() }
+
+    private fun renderDraft(draft: Map<GeneratePlatform, PostContent>): String =
+        mapper.writeValueAsString(
+            draft.mapKeys { it.key.name }.mapValues { (_, c) ->
+                buildMap<String, String> {
+                    c.title?.takeIf { it.isNotBlank() }?.let { put("title", it) }
+                    put("text", c.text)
+                    c.link?.takeIf { it.isNotBlank() }?.let { put("link", it) }
+                }
+            }
+        )
+
+    /**
      * Lenient parse of the model's JSON: markdown fences are stripped, entries
      * for unrequested platforms are ignored, and an entry with missing/blank
      * text is dropped (a title alone is meaningless — publish-time validation
-     * is the backstop for a title-less REDDIT entry). Anything that isn't a
-     * JSON object fails the call.
+     * is the backstop for a title-less entry). Anything that isn't a JSON
+     * object fails the call.
      */
     fun parseGenerated(
         raw: String,
@@ -75,16 +132,17 @@ internal object GenerationContract {
         if (root.isNull || root.isMissingNode || !root.isObject) {
             throw AiProviderException("AI response was not a JSON object")
         }
+        val needsGenericTitle = genericNeedsTitle(requested)
         val entries = linkedMapOf<GeneratePlatform, GeneratedContent>()
         for (platform in requested) {
             val entry = root.path(platform.name)
             if (entry.isMissingNode || entry.isNull) continue // tolerated: entry simply absent
             val text = entry.path("text").nonBlankOrNull() ?: continue
             // title is part of the contract only where it can be used
-            val title = if (platform == GeneratePlatform.GENERIC || platform == GeneratePlatform.REDDIT) {
-                entry.path("title").nonBlankOrNull()
-            } else {
-                null
+            val title = when (platform) {
+                GeneratePlatform.REDDIT -> entry.path("title").nonBlankOrNull()
+                GeneratePlatform.GENERIC -> if (needsGenericTitle) entry.path("title").nonBlankOrNull() else null
+                else -> null
             }
             entries[platform] = GeneratedContent(title, text)
         }

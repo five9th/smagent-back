@@ -1,6 +1,7 @@
 package com.five9th.smagent.ai
 
 import com.five9th.smagent.ai.adapter.AnthropicAdapter
+import com.five9th.smagent.ai.adapter.OpenAiCompatibleAdapter
 import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.ai.adapter.GeneratedContent
 import com.five9th.smagent.ai.adapter.GenerateCommand
@@ -37,6 +38,9 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var anthropicAdapter: AnthropicAdapter
 
+    @MockitoBean
+    lateinit var openAiAdapter: OpenAiCompatibleAdapter
+
     @Autowired
     lateinit var providers: AiProviderRepository
 
@@ -51,14 +55,17 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
     fun stubAdapter() {
         providers.deleteAll() // the in-mem H2 persists across tests in this context
         whenever(anthropicAdapter.type).thenReturn(AiProviderType.ANTHROPIC)
+        whenever(openAiAdapter.type).thenReturn(AiProviderType.OPENAI_COMPATIBLE)
         // baseUrl may be null (no override) — any() alone excludes nulls
         whenever(anthropicAdapter.generate(any(), anyOrNull(), any(), any(), any())).thenReturn(cannedResult)
+        whenever(openAiAdapter.generate(any(), anyOrNull(), any(), any(), any())).thenReturn(cannedResult)
     }
 
     private fun createProvider(
         name: String = "Anthropic main",
         defaultModel: String? = null,
         baseUrl: String? = null,
+        type: String = "ANTHROPIC",
     ): Long {
         val extras = buildString {
             defaultModel?.let { append(""","defaultModel":"$it"""") }
@@ -66,7 +73,7 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
         }
         val result = mvc.post("/api/ai-providers") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"name":"$name","type":"ANTHROPIC","apiKey":"sk-ant-decrypted-1234"$extras}"""
+            content = """{"name":"$name","type":"$type","apiKey":"sk-ant-decrypted-1234"$extras}"""
         }.andReturn()
         return Regex("\"id\":(\\d+)").find(result.response.contentAsString)!!.groupValues[1].toLong()
     }
@@ -152,6 +159,27 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
         val baseUrl = argumentCaptor<String>()
         verify(anthropicAdapter).generate(any(), baseUrl.capture(), any(), any(), any())
         assertEquals("http://localhost:5001", baseUrl.firstValue)
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `generate dispatches to the OpenAI-compatible adapter with its defaultModel`() {
+        val id = createProvider(
+            name = "OpenRouter",
+            defaultModel = "deepseek/deepseek-chat",
+            baseUrl = "https://openrouter.ai/api/v1",
+            type = "OPENAI_COMPATIBLE",
+        )
+
+        generate("""{"prompt":"hi","providerId":$id}""").andExpect {
+            status { isOk() }
+            jsonPath("$.provider") { value("OpenRouter") }
+            jsonPath("$.model") { value("deepseek/deepseek-chat") }
+        }
+
+        val model = argumentCaptor<String>()
+        verify(openAiAdapter).generate(any(), anyOrNull(), model.capture(), any(), any())
+        assertEquals("deepseek/deepseek-chat", model.firstValue)
     }
 
     @WithMockUser(roles = ["OWNER"])

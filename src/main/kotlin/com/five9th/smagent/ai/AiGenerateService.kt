@@ -65,7 +65,11 @@ class AiGenerateService(
     }
 
     companion object {
-        /** Anthropic's current mid-tier model: short-form copy at low cost/latency. */
+        /**
+         * Fallback when an ANTHROPIC provider has no defaultModel. OPENAI_COMPATIBLE
+         * providers always carry one (enforced on create/update — model names are
+         * provider-specific, no sensible constant exists).
+         */
         const val DEFAULT_MODEL = "claude-sonnet-5"
     }
 }

@@ -25,7 +25,11 @@ import org.mockito.kotlin.mock
 import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
-/** generate/verify against a stubbed AnthropicClient: params, JSON contract parse, error mapping. */
+/**
+ * generate/verify against a stubbed AnthropicClient: params, result mapping,
+ * error handling. The prompt/parse contract itself is covered by
+ * GenerationContractTest.
+ */
 class AnthropicAdapterTest {
 
     private val anthropicClient = mock<AnthropicClient>()
@@ -67,17 +71,16 @@ class AnthropicAdapterTest {
             command = GenerateCommand(
                 prompt = "Post about releasing v2 of our CLI tool",
                 platforms = platforms.toSet(),
-                constraints = GenerateConstraints(maxLength = 500, tone = "casual"),
             ),
         )
 
     @Test
-    fun `generate parses the JSON contract into content and overrides`() {
+    fun `generate maps a model answer into content, overrides and usage`() {
         respondWith(
             """
             {"GENERIC":{"title":"v2 is out","text":"master text"},
              "REDDIT":{"title":"v2","text":"community text"},
-             "X":{"title":"would be ignored","text":"short one"}}
+             "X":{"title":"ignored","text":"short one"}}
             """.trimIndent()
         )
 
@@ -85,43 +88,9 @@ class AnthropicAdapterTest {
 
         assertEquals(GeneratedContent("v2 is out", "master text"), result.content)
         assertEquals(GeneratedContent("v2", "community text"), result.overrides[Platform.REDDIT])
-        // title is only part of the contract for GENERIC and REDDIT
         assertEquals(GeneratedContent(null, "short one"), result.overrides[Platform.X])
         assertEquals(11L, result.inputTokens)
         assertEquals(7L, result.outputTokens)
-    }
-
-    @Test
-    fun `generate strips markdown fences the model added anyway`() {
-        respondWith("```json\n{\"GENERIC\":{\"text\":\"fenced\"}}\n```")
-
-        assertEquals(GeneratedContent(null, "fenced"), generate(GeneratePlatform.GENERIC).content)
-    }
-
-    @Test
-    fun `generate tolerates missing entries and drops title-only ones`() {
-        respondWith("""{"GENERIC":{"text":"master"},"X":{"title":"no text here"}}""")
-
-        val result = generate(GeneratePlatform.GENERIC, GeneratePlatform.X)
-
-        assertEquals(GeneratedContent(null, "master"), result.content)
-        assertTrue(result.overrides.isEmpty(), "X has no text -> dropped, not an error")
-    }
-
-    @Test
-    fun `generate fails as AiProviderException on non-JSON output`() {
-        respondWith("Sure! Here's your post: ...")
-
-        val e = assertFailsWith<AiProviderException> { generate(GeneratePlatform.GENERIC) }
-        assertTrue(e.message!!.contains("not valid JSON"))
-    }
-
-    @Test
-    fun `generate maps upstream failures to AiProviderException`() {
-        whenever(messagesClient.create(any<MessageCreateParams>())).thenThrow(RuntimeException("connection reset"))
-
-        val e = assertFailsWith<AiProviderException> { generate(GeneratePlatform.GENERIC) }
-        assertTrue(e.message!!.contains("connection reset"))
     }
 
     @Test
@@ -133,28 +102,21 @@ class AnthropicAdapterTest {
         verify(messagesClient).create(captor.capture())
         val params = captor.firstValue
 
-        val actualModel: String = params.model().asString()
-        assertEquals("claude-sonnet-5", actualModel)
+        assertEquals("claude-sonnet-5", params.model().asString())
         assertEquals(4096L, params.maxTokens())
         assertEquals(OutputConfig.Effort.HIGH, params.outputConfig().get().effort().get())
+        // wiring check only — the contract's content is covered by GenerationContractTest
         val system = params.system().get().asString()
         assertTrue(system.contains("Requested keys: GENERIC, REDDIT"))
-        assertTrue(!system.contains("280 characters")) // X not requested -> its rule is not offered
-        assertTrue(system.contains("\"REDDIT\": {\"title\""))
-        assertTrue(system.contains("Keep every text under 500 characters."))
-        assertTrue(system.contains("Tone: casual."))
         assertTrue(params.messages().first().content().toString().contains("releasing v2"))
     }
 
     @Test
-    fun `generate offers the X rule only when X is requested`() {
-        respondWith("""{"GENERIC":{"text":"ok"}}""")
-        generate(GeneratePlatform.GENERIC)
+    fun `generate maps upstream failures to AiProviderException`() {
+        whenever(messagesClient.create(any<MessageCreateParams>())).thenThrow(RuntimeException("connection reset"))
 
-        val system = argumentCaptor<MessageCreateParams>().apply {
-            verify(messagesClient).create(capture())
-        }.firstValue.system().get().asString()
-        assertTrue(!system.contains("280 characters"))
+        val e = assertFailsWith<AiProviderException> { generate(GeneratePlatform.GENERIC) }
+        assertTrue(e.message!!.contains("connection reset"))
     }
 
     @Test

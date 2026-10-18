@@ -1,6 +1,6 @@
 # SMAgent
 
-Version: <!-- gradle:version -->0.5.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.6.0<!-- /gradle:version -->
 
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a
@@ -13,8 +13,9 @@ Current scope (MVP):
 - **Auth:** one owner account, session cookie (HttpOnly, SameSite=Lax)
 - **Publishing:** synchronous "publish now", per-target success/failure;
   by-hand posts recorded via `publish-manual`
-- **AI:** post-text generation via a stored AI provider (ANTHROPIC today;
-  OpenAI-compatible planned) — drafts generic + per-platform variants in one call
+- **AI:** post-text generation via a stored AI provider — Anthropic or any
+  OpenAI-compatible endpoint (OpenRouter, Groq, Ollama…) — drafts generic +
+  per-platform variants in one call
 - **Not yet:** media upload, scheduling
 
 ## Stack
@@ -234,6 +235,7 @@ API-backed options live in `platform/adapter/<platform>/`; the manual
 access. Dispatch is by (platform, authMethod); nothing else changes.
 
 Same pattern for AI backends: one class implementing `AiProviderAdapter`
-(`type`, `verify`, `generate`) in `ai/adapter/`, dispatched by provider type.
-The system prompt (platform rules + JSON response contract) lives in
-`AnthropicAdapter` and is shared by all provider types.
+(`type`, `verify`, `generate`) in `ai/adapter/`, dispatched by provider type —
+`AnthropicAdapter` and `OpenAiCompatibleAdapter` today. The system prompt
+(platform rules + JSON response contract) and its lenient parser are shared
+in `ai/adapter/GenerationContract.kt`.

@@ -3,7 +3,6 @@ package com.five9th.smagent.ai
 import com.five9th.smagent.ai.adapter.AiAdapterRegistry
 import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.common.NotFoundException
-import com.five9th.smagent.common.NotImplementedException
 import com.five9th.smagent.crypto.CryptoService
 import com.five9th.smagent.domain.AiProvider
 import com.five9th.smagent.domain.AiProviderType
@@ -28,16 +27,18 @@ class AiProviderService(
     fun getDto(id: Long): AiProviderDto = toDto(get(id))
 
     fun create(request: CreateAiProviderRequest): AiProviderDto {
-        if (request.type == AiProviderType.OPENAI_COMPATIBLE) {
-            throw NotImplementedException("Creating OPENAI_COMPATIBLE providers is not implemented yet")
-        }
         val baseUrl = request.baseUrl?.trim()?.takeIf { it.isNotEmpty() }?.also(::requireHttpUrl)
+        val defaultModel = request.defaultModel?.trim()?.takeIf { it.isNotEmpty() }
+        // model names are provider-specific (gpt-5.2 / llama3.1 / deepseek/...) — no sensible built-in fallback
+        if (request.type == AiProviderType.OPENAI_COMPATIBLE && defaultModel == null) {
+            throw IllegalArgumentException("defaultModel is required for OPENAI_COMPATIBLE providers")
+        }
         val provider = AiProvider(
             name = request.name!!.trim(),
             type = request.type,
             baseUrl = baseUrl,
             apiKeyEnc = crypto.encrypt(request.apiKey!!),
-            defaultModel = request.defaultModel?.trim()?.takeIf { it.isNotEmpty() },
+            defaultModel = defaultModel,
         )
         return toDto(providers.save(provider))
     }
@@ -50,7 +51,13 @@ class AiProviderService(
         }
         request.apiKey?.takeIf { it.isNotBlank() }?.let { provider.apiKeyEnc = crypto.encrypt(it) }
         request.defaultModel?.let {
-            provider.defaultModel = it.trim().takeIf { m -> m.isNotEmpty() }
+            val newModel = it.trim().takeIf { m -> m.isNotEmpty() }
+            if (provider.type == AiProviderType.OPENAI_COMPATIBLE && newModel == null) {
+                throw IllegalArgumentException(
+                    "defaultModel is required for OPENAI_COMPATIBLE providers — pass a new model instead of clearing it"
+                )
+            }
+            provider.defaultModel = newModel
         }
         return toDto(providers.save(provider))
     }

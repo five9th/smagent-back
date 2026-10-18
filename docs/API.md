@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.5.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.6.0<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -38,8 +38,8 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Health & version endpoints          | ✅     | `/actuator/health`, `/actuator/info` — no auth, only exposed actuator endpoints       |
 | Delete published post on platform   | ❌     | `deletePublications=true` returns `501` until implemented                             |
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
-| AI provider management              | ✅     | `ANTHROPIC` type; keys encrypted + masked like platform credentials; `OPENAI_COMPATIBLE` planned (creation → `501`) |
-| AI text generation                  | ✅     | `POST /api/ai/generate` — generic + per-platform variants in one call; `OPENAI_COMPATIBLE` planned    |
+| AI provider management              | ✅     | `ANTHROPIC` + `OPENAI_COMPATIBLE` types; keys encrypted + masked like platform credentials            |
+| AI text generation                  | ✅     | `POST /api/ai/generate` — generic + per-platform variants in one call, any provider type              |
 | AI usage tracking                   | ❌     | Design below (each response already carries token usage)                              |
 | AI multi-turn chat                  | ❌     | Design below                                                                          |
 | Media upload                        | ❌     | Out of current scope                                                                  |
@@ -63,7 +63,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | 400  | validation failure, malformed body, illegal state (e.g. editing a PUBLISHED post, deleting one without `deletePublications`) |
 | 401  | not authenticated (or failed login); wrong-credentials from login returns `{"message": "..."}` (auth-controller-local shape) |
 | 404  | unknown id / endpoint — including soft-deleted accounts and posts                                                            |
-| 501  | recognized but not implemented (`deletePublications=true`, creating an `OPENAI_COMPATIBLE` provider)                         |
+| 501  | recognized but not implemented (`deletePublications=true`)                                                                   |
 | 502  | upstream platform/AI API failure (`PlatformException` / `AiProviderException`)                                               |
 | 500  | unexpected server error (logged)                                                                                             |
 
@@ -79,7 +79,7 @@ CredentialFieldKind: ID | TOKEN | PASSWORD
 AccountStatus:       UNVERIFIED | ACTIVE | INVALID
 PostStatus:          DRAFT | PUBLISHED
 PublicationStatus:   PENDING | SUCCESS | FAILED
-AiProviderType:      ANTHROPIC | OPENAI_COMPATIBLE (creation 501 for now)
+AiProviderType:      ANTHROPIC | OPENAI_COMPATIBLE
 GeneratePlatform:    GENERIC | FACEBOOK | REDDIT | X | LINKEDIN
 GenerateEffort:      LOW | MEDIUM | HIGH | XHIGH | MAX
 ```
@@ -674,7 +674,7 @@ Manage credentials for AI backends. Provider types:
 | Type                | Provider                                                   | Status |
 |---------------------|------------------------------------------------------------|--------|
 | `ANTHROPIC`         | Anthropic native API (or any endpoint implementing it)     | ✅     |
-| `OPENAI_COMPATIBLE` | OpenAI, OpenRouter, Groq, Mistral, DeepSeek, local Ollama… | ❌ creating returns `501` |
+| `OPENAI_COMPATIBLE` | OpenAI, OpenRouter, Groq, Mistral, DeepSeek, local Ollama… | ✅     |
 
 API keys are stored encrypted (`apiKeyEnc`) and masked in responses
 (`apiKeyMasked`: `••••` + last 4, or plain `••••` when shorter), exactly like
@@ -708,26 +708,38 @@ exists.
 }
 ```
 
-`baseUrl` optionally points the provider at a custom endpoint implementing the
-Anthropic API (origin only — the SDK appends `/v1/...`; must be a well-formed
-http(s) URL, else `400`). `defaultModel` overrides the built-in fallback for
-generation requests that don't name a model.
+`baseUrl` optionally points the provider at a custom endpoint; must be a
+well-formed http(s) URL (`400` otherwise). **The convention differs by type:**
+`ANTHROPIC` takes the origin only (the `/v1/...` is appended automatically), e.g.
+`http://localhost:5001`, while `OPENAI_COMPATIBLE` takes the full API root
+**including** the version path — `https://openrouter.ai/api/v1`,
+`https://api.groq.com/openai/v1`, `http://localhost:11434/v1` (Ollama); absent
+defaults to `https://api.openai.com/v1`.
+
+`defaultModel` overrides the built-in fallback for generation requests that
+don't name a model. **Required for `OPENAI_COMPATIBLE`** (model names are
+provider-specific — `gpt-5.2`, `llama3.1`, `deepseek/...` — so no sensible
+built-in exists); optional for `ANTHROPIC`, which falls back to
+`claude-sonnet-5`.
 
 ### POST /api/ai-providers
 
 ```json
-{ "name": "Anthropic main", "type": "ANTHROPIC", "apiKey": "sk-ant-...",
-  "baseUrl": null, "defaultModel": null }
+{ "name": "OpenRouter", "type": "OPENAI_COMPATIBLE",
+  "baseUrl": "https://openrouter.ai/api/v1", "apiKey": "sk-or-...",
+  "defaultModel": "deepseek/deepseek-chat" }
 ```
 
 → `201` [AiProviderDto](#aiproviderdto). `name` and `apiKey` required
-(`400` when blank). `OPENAI_COMPATIBLE` → `501` until that adapter exists.
+(`400` when blank); `OPENAI_COMPATIBLE` additionally requires `defaultModel`.
 
 ### PUT /api/ai-providers/{id}
 
 Every field optional; absent or blank `apiKey` keeps the stored key. `null`
 keeps `baseUrl`/`defaultModel`, an empty string clears them (back to the
-provider default / built-in fallback). Unknown id → `404`.
+provider default / built-in fallback) — except `defaultModel` on an
+`OPENAI_COMPATIBLE` provider, which cannot be cleared, only replaced (`400`).
+Unknown id → `404`.
 
 ### POST /api/ai-providers/{id}/verify
 
@@ -765,8 +777,11 @@ the post editor.
   "platforms": ["GENERIC", "X", "REDDIT"],  // optional, default ["GENERIC"]; empty -> 400
   "constraints": { "maxLength": 500, "tone": "casual" },  // both optional, apply to every variant
   "providerId": 2,            // optional — required (400) when several providers exist and it's omitted
-  "model": "claude-sonnet-5", // optional — provider.defaultModel -> built-in "claude-sonnet-5"
-  "effort": "LOW"             // optional — LOW | MEDIUM | HIGH | XHIGH | MAX, defaults LOW
+  "model": "claude-sonnet-5", // optional — provider.defaultModel -> built-in "claude-sonnet-5" (ANTHROPIC only;
+                              //   OPENAI_COMPATIBLE providers always carry a defaultModel)
+  "effort": "LOW"             // optional — LOW | MEDIUM | HIGH | XHIGH | MAX, defaults LOW.
+                              //   ANTHROPIC only for now — not sent to OPENAI_COMPATIBLE endpoints
+
 }
 ```
 
@@ -793,7 +808,8 @@ Semantics:
 - A `title` appears only on `GENERIC` (optional) and `REDDIT` (required at
   publish time — Reddit needs one; entries without text are dropped silently).
 - The system prompt (platform rules, the JSON response contract, global
-  constraints) lives entirely server-side; the request carries intent only.
+  constraints) lives entirely server-side and is identical for every provider
+  type; the request carries intent only.
 - The result is **not** auto-saved as a post — the frontend previews, the user
   edits, then `POST /api/posts` as usual. Unknown `providerId` → `404`; blank
   `prompt`/empty `platforms` → `400`.

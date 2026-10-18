@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.five9th"
-version = "0.5.0"
+version = "0.6.0"
 description = "smagent"
 
 java {
@@ -31,6 +31,7 @@ dependencies {
     implementation("org.jetbrains.kotlin:kotlin-reflect")
     implementation("tools.jackson.module:jackson-module-kotlin")
     implementation("com.anthropic:anthropic-java:2.70.0")
+    implementation("com.openai:openai-java:4.83.0")
     runtimeOnly("com.h2database:h2")
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")

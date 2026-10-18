@@ -2,6 +2,7 @@ package com.five9th.smagent.ai
 
 import com.five9th.smagent.ai.adapter.AiProviderException
 import com.five9th.smagent.ai.adapter.AnthropicAdapter
+import com.five9th.smagent.ai.adapter.OpenAiCompatibleAdapter
 import com.five9th.smagent.domain.AiProviderType
 import com.five9th.smagent.repo.AiProviderRepository
 import org.junit.jupiter.api.BeforeEach
@@ -30,6 +31,9 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     @MockitoBean
     lateinit var anthropicAdapter: AnthropicAdapter
 
+    @MockitoBean
+    lateinit var openAiAdapter: OpenAiCompatibleAdapter
+
     @Autowired
     lateinit var providers: AiProviderRepository
 
@@ -37,6 +41,7 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
     fun resetState() {
         providers.deleteAll() // the in-mem H2 persists across tests in this context
         whenever(anthropicAdapter.type).thenReturn(AiProviderType.ANTHROPIC)
+        whenever(openAiAdapter.type).thenReturn(AiProviderType.OPENAI_COMPATIBLE)
     }
 
     private fun createProvider(body: String): Long {
@@ -89,13 +94,32 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
 
     @WithMockUser(roles = ["OWNER"])
     @Test
-    fun `create with OPENAI_COMPATIBLE returns 501`() {
+    fun `create OPENAI_COMPATIBLE provider with a defaultModel`() {
+        mvc.post("/api/ai-providers") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """
+                {"name":"OpenRouter","type":"OPENAI_COMPATIBLE",
+                 "baseUrl":"https://openrouter.ai/api/v1","apiKey":"sk-or-verylongkey-1234",
+                 "defaultModel":"deepseek/deepseek-chat"}
+            """.trimIndent()
+        }.andExpect {
+            status { isCreated() }
+            jsonPath("$.type") { value("OPENAI_COMPATIBLE") }
+            jsonPath("$.baseUrl") { value("https://openrouter.ai/api/v1") }
+            jsonPath("$.apiKeyMasked") { value("••••1234") }
+            jsonPath("$.defaultModel") { value("deepseek/deepseek-chat") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `create OPENAI_COMPATIBLE without defaultModel returns 400`() {
         mvc.post("/api/ai-providers") {
             contentType = MediaType.APPLICATION_JSON
             content = """{"name":"OpenRouter","type":"OPENAI_COMPATIBLE","apiKey":"sk-or-1"}"""
         }.andExpect {
-            status { isNotImplemented() }
-            jsonPath("$.message") { value("Creating OPENAI_COMPATIBLE providers is not implemented yet") }
+            status { isBadRequest() }
+            jsonPath("$.message") { value("defaultModel is required for OPENAI_COMPATIBLE providers") }
         }
     }
 
@@ -181,6 +205,50 @@ class AiProviderIntegrationTest(@Autowired val mvc: MockMvc) {
             status { isOk() }
             jsonPath("$.baseUrl") { doesNotExist() }
             jsonPath("$.defaultModel") { doesNotExist() }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `update refuses clearing defaultModel on OPENAI_COMPATIBLE`() {
+        val id = createProvider(
+            """{"name":"OpenRouter","type":"OPENAI_COMPATIBLE","apiKey":"k",
+               "baseUrl":"https://openrouter.ai/api/v1","defaultModel":"deepseek/deepseek-chat"}"""
+        )
+
+        mvc.put("/api/ai-providers/{id}", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"defaultModel":""}"""
+        }.andExpect {
+            status { isBadRequest() }
+            jsonPath("$.message") {
+                value("defaultModel is required for OPENAI_COMPATIBLE providers — pass a new model instead of clearing it")
+            }
+        }
+
+        // replacing (not clearing) stays fine
+        mvc.put("/api/ai-providers/{id}", id) {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"defaultModel":"openai/gpt-5.2"}"""
+        }.andExpect {
+            status { isOk() }
+            jsonPath("$.defaultModel") { value("openai/gpt-5.2") }
+        }
+    }
+
+    @WithMockUser(roles = ["OWNER"])
+    @Test
+    fun `verify dispatches to the OpenAI-compatible adapter`() {
+        val id = createProvider(
+            """{"name":"OpenRouter","type":"OPENAI_COMPATIBLE","apiKey":"k",
+               "baseUrl":"https://openrouter.ai/api/v1","defaultModel":"deepseek/deepseek-chat"}"""
+        )
+        whenever(openAiAdapter.verify(any(), anyOrNull())).thenReturn("Key valid — 300 models available")
+
+        mvc.post("/api/ai-providers/{id}/verify", id).andExpect {
+            status { isOk() }
+            jsonPath("$.ok") { value(true) }
+            jsonPath("$.message") { value("Key valid — 300 models available") }
         }
     }
 

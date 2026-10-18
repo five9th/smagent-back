@@ -3,6 +3,7 @@ package com.five9th.smagent.repo
 import com.five9th.smagent.domain.AiProvider
 import com.five9th.smagent.domain.AppUser
 import com.five9th.smagent.domain.FeedbackItem
+import com.five9th.smagent.domain.GenerationSettings
 import com.five9th.smagent.domain.Post
 import com.five9th.smagent.domain.PostStatus
 import com.five9th.smagent.domain.Publication
@@ -39,4 +40,8 @@ interface FeedbackItemRepository : JpaRepository<FeedbackItem, Long> {
 
 interface AiProviderRepository : JpaRepository<AiProvider, Long> {
     fun findAllByOrderByCreatedAtDesc(): List<AiProvider>
+}
+
+interface GenerationSettingsRepository : JpaRepository<GenerationSettings, Long> {
+    fun findFirstByOrderByIdAsc(): GenerationSettings?
 }

@@ -18,12 +18,32 @@ internal object GenerationContract {
     private val mapper = JsonMapper.builder().build()
 
     /**
+     * Built-in per-platform style fragments for the system prompt (the
+     * editorial half of each rule line — the structural half, shapes and hard
+     * requirements, is templated and never overridable). GENERIC starts empty:
+     * its line is almost entirely structural. Owner overrides live in
+     * GenerationSettings and are merged over these (see [rulesWith]).
+     */
+    val DEFAULT_RULES: Map<GeneratePlatform, String> = linkedMapOf(
+        GeneratePlatform.GENERIC to "",
+        GeneratePlatform.FACEBOOK to "conversational, may run a bit longer.",
+        GeneratePlatform.REDDIT to "community tone, honest, no corporate speak.",
+        GeneratePlatform.X to "at most 280 characters total, punchy.",
+        GeneratePlatform.LINKEDIN to "professional and clear, no hashtag spam.",
+    )
+
+    /** Defaults with the (already sanitized) overrides applied; blank overrides fall back. */
+    fun rulesWith(overrides: Map<GeneratePlatform, String>?): Map<GeneratePlatform, String> =
+        DEFAULT_RULES + (overrides ?: emptyMap()).filterValues { it.isNotBlank() }
+
+    /**
      * The whole response contract lives here: requested keys, entry shapes
      * (title only where it can be used — see [genericNeedsTitle]), per-platform
-     * rules, the edit contract when a draft is provided, and the global
-     * constraints.
+     * rules (structural template + owner style), the edit contract when a draft
+     * is provided, and the global constraints.
      */
     fun systemPrompt(command: GenerateCommand): String = buildString {
+        val rules = rulesWith(command.platformRules)
         appendLine("You draft social media posts for a single owner publishing to their own accounts.")
         appendLine()
         appendLine("Respond with ONLY a valid JSON object — no markdown fences, no commentary, no keys beyond the ones requested.")
@@ -31,22 +51,24 @@ internal object GenerationContract {
         appendLine()
         appendLine("Entry shapes and rules:")
         if (GeneratePlatform.GENERIC in command.platforms) {
+            val style = styleSentence(rules.getValue(GeneratePlatform.GENERIC))
             if (genericNeedsTitle(command.platforms)) {
-                appendLine("- \"GENERIC\": {\"title\": <string>, \"text\": <string>} — the master version other platforms fall back to. The title is REQUIRED: this text may later be published to Reddit, which displays one.")
+                appendLine("- \"GENERIC\": {\"title\": <string>, \"text\": <string>} — the master version other platforms fall back to.$style The title is REQUIRED: this text may later be published to Reddit, which displays one.")
             } else {
-                appendLine("- \"GENERIC\": {\"text\": <string>} — the master version other platforms fall back to. No title: the requested REDDIT entry carries its own.")
+                appendLine("- \"GENERIC\": {\"text\": <string>} — the master version other platforms fall back to.$style No title: the requested REDDIT entry carries its own.")
             }
         }
         command.platforms.forEach { platform ->
+            val style = styleSentence(rules.getValue(platform))
             when (platform) {
                 GeneratePlatform.REDDIT ->
-                    appendLine("- \"REDDIT\": {\"title\": <string>, \"text\": <string>} — community tone, honest, no corporate speak. The title is REQUIRED (Reddit posts need one) and at most 300 characters.")
+                    appendLine("- \"REDDIT\": {\"title\": <string>, \"text\": <string>} —$style The title is REQUIRED (Reddit posts need one) and at most 300 characters.")
                 GeneratePlatform.X ->
-                    appendLine("- \"X\": {\"text\": <string>} — at most 280 characters total, punchy. No title.")
+                    appendLine("- \"X\": {\"text\": <string>} —$style No title.")
                 GeneratePlatform.FACEBOOK ->
-                    appendLine("- \"FACEBOOK\": {\"text\": <string>} — conversational, may run a bit longer. No title.")
+                    appendLine("- \"FACEBOOK\": {\"text\": <string>} —$style No title.")
                 GeneratePlatform.LINKEDIN ->
-                    appendLine("- \"LINKEDIN\": {\"text\": <string>} — professional and clear, no hashtag spam. No title.")
+                    appendLine("- \"LINKEDIN\": {\"text\": <string>} —$style No title.")
                 GeneratePlatform.GENERIC -> {} // described above
             }
         }
@@ -101,6 +123,13 @@ internal object GenerationContract {
             ?.takeIf { it.isNotEmpty() }
             ?.filterValues { it.text.isNotBlank() }
             ?.takeIf { it.isNotEmpty() }
+
+    /** A style fragment as a lead-in sentence: " dry humor." — empty stays empty. */
+    private fun styleSentence(style: String): String {
+        val s = style.trim()
+        if (s.isEmpty()) return ""
+        return " " + if (s.last() in ".!?;:") s else "$s."
+    }
 
     private fun renderDraft(draft: Map<GeneratePlatform, PostContent>): String =
         mapper.writeValueAsString(

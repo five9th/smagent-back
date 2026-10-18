@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.8.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.9.0<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -40,6 +40,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
 | AI provider management              | ✅     | `ANTHROPIC` + `OPENAI_COMPATIBLE` types; keys encrypted + masked like platform credentials            |
 | AI text generation                  | ✅     | `POST /api/ai/generate` — generic + per-platform variants in one call, any provider type              |
+| AI platform style rules             | ✅     | `GET/PUT /api/ai/generation-settings` — owner-editable style half of each prompt rule                 |
 | AI usage tracking                   | ❌     | Design below (each response already carries token usage)                              |
 | AI multi-turn chat                  | ❌     | Design below                                                                          |
 | Media upload                        | ❌     | Out of current scope                                                                  |
@@ -804,11 +805,12 @@ content and any requested per-platform variants; the response mirrors the
 `PostDto` `content`/`overrides` shape so the frontend can drop it straight into
 the post editor.
 
-| Method               | Path                   | Description                            | Status |
-|----------------------|------------------------|----------------------------------------|--------|
-| POST                 | `/api/ai/generate`     | One-shot generation for a post draft   | ✅     |
-| GET                  | `/api/ai/effort-levels`| Effort levels for the picker (stub)    | ✅     |
-| POST                 | `/api/ai/chat`         | Multi-turn refinement conversation     | ❌     |
+| Method               | Path                     | Description                                       | Status |
+|----------------------|--------------------------|---------------------------------------------------|--------|
+| POST                 | `/api/ai/generate`       | One-shot generation for a post draft              | ✅     |
+| GET                  | `/api/ai/effort-levels`  | Effort levels for the picker (stub)               | ✅     |
+| GET/PUT              | `/api/ai/generation-settings` | Owner-editable per-platform style rules      | ✅     |
+| POST                 | `/api/ai/chat`           | Multi-turn refinement conversation                | ❌     |
 
 ### POST /api/ai/generate
 
@@ -883,6 +885,30 @@ Stub for the SPA's effort picker — the full enum, same list for every model:
 
 Later this can map a model to the values it actually supports; query params
 (`providerId`/`model`) would be additive to the stub shape.
+
+### GET/PUT /api/ai/generation-settings
+
+Each platform's rule in the generation system prompt has a fixed structural
+half (the JSON entry shape, etc.) and an editable **style** half (the owner's taste — e.g. X's
+"at most 280 characters total, punchy."). These endpoints expose and allow to override the style
+half.
+
+```json
+// GET
+{ "platformRules": { "GENERIC": "", "FACEBOOK": "conversational, may run a bit longer.",
+                     "REDDIT": "community tone, honest, no corporate speak.",
+                     "X": "at most 280 characters total, punchy.",
+                     "LINKEDIN": "professional and clear, no hashtag spam." },
+  "defaults": { "...same shape, the built-ins — for reset UIs..." } }
+```
+
+`PUT` replaces the whole override set — an absent, `null` or blank value for a
+platform resets it to its default (`"defaults"` in GET). Each rule is capped
+at 1000 characters (`400` beyond).
+
+Note the platform limits themselves (like X's 280) are not enforced by the
+app — a style that exceeds them simply produces posts the platform may reject
+at publish time.
 
 ### Token usage — what's actually possible (planned endpoint)
 

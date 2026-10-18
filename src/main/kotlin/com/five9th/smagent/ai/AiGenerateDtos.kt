@@ -45,3 +45,14 @@ data class TokenUsageDto(
     val inputTokens: Long,
     val outputTokens: Long,
 )
+
+/** Effective per-platform style rules (overrides merged over the built-ins) + the built-ins for reset UIs. */
+data class GenerationSettingsDto(
+    val platformRules: Map<GeneratePlatform, String>,
+    val defaults: Map<GeneratePlatform, String>,
+)
+
+/** Full replace: an absent, null or blank value resets that platform to its built-in default. */
+data class UpdateGenerationSettingsRequest(
+    val platformRules: Map<GeneratePlatform, String?>? = null,
+)

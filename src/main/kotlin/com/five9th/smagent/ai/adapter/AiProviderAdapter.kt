@@ -51,6 +51,12 @@ data class GenerateCommand(
      * Blank-text entries are ignored when building the prompt.
      */
     val editorState: Map<GeneratePlatform, PostContent>? = null,
+    /**
+     * Effective per-platform style rules (GenerationSettings overrides merged
+     * over the built-ins by the service — server context, not request data).
+     * Null/blank entries fall back to [GenerationContract.DEFAULT_RULES].
+     */
+    val platformRules: Map<GeneratePlatform, String>? = null,
 )
 
 data class GenerateConstraints(

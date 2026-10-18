@@ -137,6 +137,8 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
         assertEquals(setOf(GeneratePlatform.GENERIC), command.firstValue.platforms)
         assertNull(command.firstValue.constraints)
         assertNull(command.firstValue.editorState)
+        // effective style rules always ride along (defaults when nothing is overridden)
+        assertEquals("at most 280 characters total, punchy.", command.firstValue.platformRules?.get(GeneratePlatform.X))
     }
 
     @WithMockUser(roles = ["OWNER"])

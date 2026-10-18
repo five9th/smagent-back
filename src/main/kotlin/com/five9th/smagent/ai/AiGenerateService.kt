@@ -21,6 +21,7 @@ class AiGenerateService(
     private val providerService: AiProviderService,
     private val crypto: CryptoService,
     private val registry: AiAdapterRegistry,
+    private val generationSettings: AiGenerationSettingsService,
 ) {
 
     fun generate(request: GenerateRequest): GenerateResponse {
@@ -43,6 +44,7 @@ class AiGenerateService(
                 platforms = platforms,
                 constraints = request.constraints,
                 editorState = request.editorState,
+                platformRules = generationSettings.effectiveRules(),
             ),
         )
         return GenerateResponse(

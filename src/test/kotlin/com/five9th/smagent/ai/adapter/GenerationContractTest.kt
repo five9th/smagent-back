@@ -59,6 +59,35 @@ class GenerationContractTest {
     }
 
     @Test
+    fun `custom platform styles render inside the structural template`() {
+        val prompt = GenerationContract.systemPrompt(
+            command(setOf(GeneratePlatform.GENERIC, GeneratePlatform.X, GeneratePlatform.REDDIT)).copy(
+                platformRules = mapOf(
+                    GeneratePlatform.X to "dry humor, under 200 characters", // no period -> one is added
+                    GeneratePlatform.REDDIT to "meme-heavy and lowercase.",
+                ),
+            )
+        )
+
+        // custom style present, structural template always around it
+        assertTrue(prompt.contains("- \"X\": {\"text\": <string>} — dry humor, under 200 characters. No title."))
+        assertTrue(prompt.contains("- \"REDDIT\": {\"title\": <string>, \"text\": <string>} — meme-heavy and lowercase. The title is REQUIRED (Reddit posts need one) and at most 300 characters."))
+        // untouched platforms keep their built-in style
+        assertTrue(prompt.contains("280 characters").not()) // X default replaced
+    }
+
+    @Test
+    fun `blank rule overrides fall back to the built-ins`() {
+        val prompt = GenerationContract.systemPrompt(
+            command(setOf(GeneratePlatform.X)).copy(
+                platformRules = mapOf(GeneratePlatform.X to "   "),
+            )
+        )
+
+        assertTrue(prompt.contains("at most 280 characters total, punchy."))
+    }
+
+    @Test
     fun `system prompt folds in constraints and skips them when absent`() {
         val constrained = GenerationContract.systemPrompt(
             command(setOf(GeneratePlatform.GENERIC), GenerateConstraints(maxLength = 500, tone = "casual"))

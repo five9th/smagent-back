@@ -67,12 +67,10 @@ class XAccessTokenAdapter(
         val text = command.text +
             (command.link?.trim()?.takeIf { it.isNotEmpty() }?.let { "\n\n$it" } ?: "")
 
-        // author_id expansion usually returns the handle in the same response;
-        // without it one extra lookup resolves the post URL
         val body: JsonNode = callWithRetry(creds, this) { token ->
             mapper.readTree(
                 client.post()
-                    .uri("/2/tweets?expansions=author_id&user.fields=username")
+                    .uri("/2/tweets")
                     .headers { it.setBearerAuth(token) }
                     .contentType(MediaType.APPLICATION_JSON)
                     .body(mapper.writeValueAsString(mapOf("text" to text)))
@@ -82,13 +80,9 @@ class XAccessTokenAdapter(
         }
         val id = body.path("data").path("id").asStringOrNull()
             ?: throw PlatformException("X publish response did not include a post id")
-        val users = body.path("includes").path("users")
-        val expandedUsername = if (users.isArray) {
-            users.firstOrNull()?.path("username")?.asStringOrNull()
-        } else {
-            null
-        }
-        val username = expandedUsername ?: me(creds, this).username
+        // the create endpoint takes no expansions (verified the hard way) —
+        // one extra lookup resolves the post URL's handle
+        val username = me(creds, this).username
         PublishResult(
             externalUrl = "https://x.com/$username/status/$id",
             refreshedCredentials = values,

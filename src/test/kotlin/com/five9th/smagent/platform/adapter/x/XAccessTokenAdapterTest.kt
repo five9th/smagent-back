@@ -151,18 +151,18 @@ class XAccessTokenAdapterTest {
     }
 
     @Test
-    fun `publish posts text and link and reads the expanded author`() {
-        server.expect(requestTo("https://api.x.com/2/tweets?expansions=author_id&user.fields=username"))
+    fun `publish posts text and link and resolves the handle from users me`() {
+        server.expect(requestTo("https://api.x.com/2/tweets"))
             .andExpect(method(HttpMethod.POST))
             .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok"))
             .andExpect(content().contentType(MediaType.APPLICATION_JSON))
             .andExpect(jsonPath("$.text").value("hello\n\nhttps://example.com/a"))
             .andRespond(
-                withSuccess(
-                    """{"data":{"id":"1747047870031790080","text":"hello"},
-                        "includes":{"users":[{"id":"2244994945","name":"Jane Doe","username":"janedoe"}]}}""",
-                    MediaType.APPLICATION_JSON,
-                )
+                withSuccess("""{"data":{"id":"1747047870031790080","text":"hello"}}""", MediaType.APPLICATION_JSON)
+            )
+        server.expect(requestTo("https://api.x.com/2/users/me"))
+            .andRespond(
+                withSuccess("""{"data":{"id":"2244994945","name":"Jane Doe","username":"janedoe"}}""", MediaType.APPLICATION_JSON)
             )
 
         val result = adapter.publish(creds, PublishCommand(title = "ignored", text = "hello", link = "https://example.com/a"))
@@ -173,7 +173,7 @@ class XAccessTokenAdapterTest {
 
     @Test
     fun `publish falls back to users me when the response carries no author`() {
-        server.expect(requestTo("https://api.x.com/2/tweets?expansions=author_id&user.fields=username"))
+        server.expect(requestTo("https://api.x.com/2/tweets"))
             .andRespond(
                 withSuccess("""{"data":{"id":"123"}}""", MediaType.APPLICATION_JSON)
             )
@@ -189,10 +189,10 @@ class XAccessTokenAdapterTest {
 
     @Test
     fun `a publish that refreshes and then fails still carries the rotation`() {
-        server.expect(requestTo("https://api.x.com/2/tweets?expansions=author_id&user.fields=username"))
+        server.expect(requestTo("https://api.x.com/2/tweets"))
             .andRespond(withStatus(HttpStatus.UNAUTHORIZED))
         expectRefresh("rtok")
-        server.expect(requestTo("https://api.x.com/2/tweets?expansions=author_id&user.fields=username"))
+        server.expect(requestTo("https://api.x.com/2/tweets"))
             .andExpect(header(HttpHeaders.AUTHORIZATION, "Bearer tok2"))
             .andRespond(
                 withStatus(HttpStatus.FORBIDDEN)
@@ -209,7 +209,7 @@ class XAccessTokenAdapterTest {
 
     @Test
     fun `publish without a post id fails`() {
-        server.expect(requestTo("https://api.x.com/2/tweets?expansions=author_id&user.fields=username"))
+        server.expect(requestTo("https://api.x.com/2/tweets"))
             .andRespond(withSuccess("""{"data":{}}""", MediaType.APPLICATION_JSON))
 
         assertFailsWith<PlatformException> {

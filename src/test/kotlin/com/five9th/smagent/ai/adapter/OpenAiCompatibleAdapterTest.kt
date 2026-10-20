@@ -76,7 +76,8 @@ class OpenAiCompatibleAdapterTest {
             """
             {"GENERIC":{"title":"dropped: REDDIT is requested","text":"master text"},
              "REDDIT":{"title":"v2","text":"community text"},
-             "X":{"title":"ignored","text":"short one"}}
+             "X":{"title":"ignored","text":"short one"},
+             "note":"tone contradicts X's punchy rule; kept the rule"}
             """.trimIndent()
         )
 
@@ -87,6 +88,7 @@ class OpenAiCompatibleAdapterTest {
         assertEquals(GeneratedContent(null, "short one"), result.overrides[Platform.X])
         assertEquals(11L, result.inputTokens)
         assertEquals(7L, result.outputTokens)
+        assertEquals("tone contradicts X's punchy rule; kept the rule", result.note)
     }
 
     @Test

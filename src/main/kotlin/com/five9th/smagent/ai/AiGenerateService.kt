@@ -53,6 +53,7 @@ class AiGenerateService(
             provider = provider.name,
             model = model,
             usage = TokenUsageDto(result.inputTokens, result.outputTokens),
+            note = result.note,
         )
     }
 

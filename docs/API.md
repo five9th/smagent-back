@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.9.0<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.9.1<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -842,9 +842,15 @@ the post editor.
   },
   "provider": "Anthropic main",
   "model": "claude-sonnet-5",
-  "usage": { "inputTokens": 512, "outputTokens": 613 }
+  "usage": { "inputTokens": 512, "outputTokens": 613 },
+  "note": "tone contradicts X's punchy rule; kept the rule"
 }
 ```
+
+`note` is optional — the model is told to attach one short feedback sentence
+only when something genuinely needs the user's attention (a contradiction in
+the request, an ambiguity it had to resolve, a constraint it couldn't
+satisfy); it is omitted otherwise and never describes the generated text.
 
 Semantics:
 

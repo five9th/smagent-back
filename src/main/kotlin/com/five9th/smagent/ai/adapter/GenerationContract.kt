@@ -46,7 +46,7 @@ internal object GenerationContract {
         val rules = rulesWith(command.platformRules)
         appendLine("You draft social media posts for a single owner publishing to their own accounts.")
         appendLine()
-        appendLine("Respond with ONLY a valid JSON object — no markdown fences, no commentary, no keys beyond the ones requested.")
+        appendLine("Respond with ONLY a valid JSON object — no markdown fences, no commentary, no keys beyond the ones requested and the optional \"note\".")
         appendLine("Requested keys: ${command.platforms.joinToString(", ") { it.name }}.")
         appendLine()
         appendLine("Entry shapes and rules:")
@@ -74,6 +74,8 @@ internal object GenerationContract {
         }
         appendLine()
         appendLine("Titles: only Reddit displays one — every other platform shows the text alone. The text of any entry except REDDIT must stand on its own, never relying on a title to carry meaning.")
+        appendLine()
+        appendLine("You may include a top-level \"note\": one short sentence of feedback for the user about their request — only when something genuinely needs their attention (a contradiction, an ambiguity you had to resolve, a constraint you could not satisfy). Omit \"note\" otherwise; never use it for pleasantries or to describe what you wrote.")
         draftEntries(command)?.let { draft ->
             appendLine()
             appendLine("A current draft is provided with the request. Treat the request as an edit of that draft and return the complete updated entries for the requested keys — full replacements, never diffs.")
@@ -152,7 +154,7 @@ internal object GenerationContract {
     fun parseGenerated(
         raw: String,
         requested: Set<GeneratePlatform>,
-    ): Map<GeneratePlatform, GeneratedContent> {
+    ): ParsedGeneration {
         val root = try {
             mapper.readTree(stripFences(raw))
         } catch (e: Exception) {
@@ -175,7 +177,7 @@ internal object GenerationContract {
             }
             entries[platform] = GeneratedContent(title, text)
         }
-        return entries
+        return ParsedGeneration(entries = entries, note = root.path("note").nonBlankOrNull())
     }
 
     /** Handles the common ``` and ```json wrappers some models add anyway. */
@@ -188,16 +190,17 @@ internal object GenerationContract {
         return s
     }
 
-    /** Map parsed entries (+ the call's usage) into the transport result. */
+    /** Map the parsed generation (+ the call's usage) into the transport result. */
     fun assembleResult(
-        entries: Map<GeneratePlatform, GeneratedContent>,
+        parsed: ParsedGeneration,
         inputTokens: Long,
         outputTokens: Long,
     ): GenerateResult = GenerateResult(
-        content = entries[GeneratePlatform.GENERIC],
-        overrides = entries.filterKeys { it != GeneratePlatform.GENERIC }.mapKeys { it.key.toPlatform() },
+        content = parsed.entries[GeneratePlatform.GENERIC],
+        overrides = parsed.entries.filterKeys { it != GeneratePlatform.GENERIC }.mapKeys { it.key.toPlatform() },
         inputTokens = inputTokens,
         outputTokens = outputTokens,
+        note = parsed.note,
     )
 
     private fun GeneratePlatform.toPlatform(): Platform = when (this) {

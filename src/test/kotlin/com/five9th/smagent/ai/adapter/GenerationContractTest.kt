@@ -6,6 +6,7 @@ import com.five9th.smagent.domain.PostContent
 import kotlin.test.assertEquals
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import org.junit.jupiter.api.Test
 
@@ -153,15 +154,38 @@ class GenerationContractTest {
 
         // no REDDIT requested -> the generic title is part of the contract
         val standalone = GenerationContract.parseGenerated(raw, setOf(GeneratePlatform.GENERIC, GeneratePlatform.X))
-        assertEquals(GeneratedContent("generic title", "master"), standalone[GeneratePlatform.GENERIC])
-        assertEquals(GeneratedContent(null, "short one"), standalone[GeneratePlatform.X])
+        assertEquals(GeneratedContent("generic title", "master"), standalone.entries[GeneratePlatform.GENERIC])
+        assertEquals(GeneratedContent(null, "short one"), standalone.entries[GeneratePlatform.X])
 
         // REDDIT requested -> the generic title is dropped, REDDIT keeps its own
         val withReddit = GenerationContract.parseGenerated(
             raw, setOf(GeneratePlatform.GENERIC, GeneratePlatform.REDDIT, GeneratePlatform.X)
         )
-        assertEquals(GeneratedContent(null, "master"), withReddit[GeneratePlatform.GENERIC])
-        assertEquals(GeneratedContent("v2", "community"), withReddit[GeneratePlatform.REDDIT])
+        assertEquals(GeneratedContent(null, "master"), withReddit.entries[GeneratePlatform.GENERIC])
+        assertEquals(GeneratedContent("v2", "community"), withReddit.entries[GeneratePlatform.REDDIT])
+    }
+
+    @Test
+    fun `parse reads the optional note`() {
+        val withNote = GenerationContract.parseGenerated(
+            """{"GENERIC":{"text":"master"},"note":"max_length contradicts X's rule; kept the rule"}""",
+            setOf(GeneratePlatform.GENERIC),
+        )
+        assertEquals("max_length contradicts X's rule; kept the rule", withNote.note)
+
+        val withoutNote = GenerationContract.parseGenerated(
+            """{"GENERIC":{"text":"master"},"note":"  "}""",
+            setOf(GeneratePlatform.GENERIC),
+        )
+        assertNull(withoutNote.note)
+    }
+
+    @Test
+    fun `system prompt offers the note sparingly`() {
+        val prompt = GenerationContract.systemPrompt(command(setOf(GeneratePlatform.GENERIC)))
+
+        assertTrue(prompt.contains("top-level \"note\""))
+        assertTrue(prompt.contains("only when something genuinely needs their attention"))
     }
 
     @Test
@@ -171,7 +195,7 @@ class GenerationContractTest {
             setOf(GeneratePlatform.GENERIC),
         )
 
-        assertEquals(GeneratedContent(null, "fenced"), entries[GeneratePlatform.GENERIC])
+        assertEquals(GeneratedContent(null, "fenced"), entries.entries[GeneratePlatform.GENERIC])
     }
 
     @Test
@@ -181,8 +205,8 @@ class GenerationContractTest {
             setOf(GeneratePlatform.GENERIC, GeneratePlatform.X),
         )
 
-        assertEquals(GeneratedContent(null, "master"), entries[GeneratePlatform.GENERIC])
-        assertFalse(GeneratePlatform.X in entries)
+        assertEquals(GeneratedContent(null, "master"), entries.entries[GeneratePlatform.GENERIC])
+        assertFalse(GeneratePlatform.X in entries.entries)
     }
 
     @Test
@@ -194,17 +218,21 @@ class GenerationContractTest {
     }
 
     @Test
-    fun `assembleResult splits content and overrides`() {
-        val entries = mapOf(
-            GeneratePlatform.GENERIC to GeneratedContent("t", "master"),
-            GeneratePlatform.X to GeneratedContent(null, "short"),
+    fun `assembleResult splits content, overrides and note`() {
+        val parsed = ParsedGeneration(
+            entries = mapOf(
+                GeneratePlatform.GENERIC to GeneratedContent("t", "master"),
+                GeneratePlatform.X to GeneratedContent(null, "short"),
+            ),
+            note = "a contradiction was resolved",
         )
 
-        val result = GenerationContract.assembleResult(entries, inputTokens = 11, outputTokens = 7)
+        val result = GenerationContract.assembleResult(parsed, inputTokens = 11, outputTokens = 7)
 
         assertEquals(GeneratedContent("t", "master"), result.content)
         assertEquals(mapOf(Platform.X to GeneratedContent(null, "short")), result.overrides)
         assertEquals(11L, result.inputTokens)
         assertEquals(7L, result.outputTokens)
+        assertEquals("a contradiction was resolved", result.note)
     }
 }

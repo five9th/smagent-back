@@ -58,7 +58,7 @@ class AnthropicAdapter : AiProviderAdapter {
             .mapNotNull { it.text().orElse(null) }
             .joinToString("\n") { it.text() }
         return GenerationContract.assembleResult(
-            entries = GenerationContract.parseGenerated(raw, command.platforms),
+            parsed = GenerationContract.parseGenerated(raw, command.platforms),
             inputTokens = message.usage().inputTokens(),
             outputTokens = message.usage().outputTokens(),
         )

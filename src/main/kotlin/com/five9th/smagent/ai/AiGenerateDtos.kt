@@ -33,6 +33,8 @@ data class GenerateResponse(
     val provider: String,
     val model: String,
     val usage: TokenUsageDto,
+    /** Optional AI feedback for the user (e.g. a contradiction in the request); present only when it has something worth flagging. */
+    val note: String? = null,
 )
 
 data class GeneratedTextDto(

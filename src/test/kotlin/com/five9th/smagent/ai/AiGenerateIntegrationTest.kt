@@ -54,6 +54,7 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
         overrides = mapOf(Platform.REDDIT to GeneratedContent("v2", "community text")),
         inputTokens = 11,
         outputTokens = 7,
+        note = "tone contradicts X's punchy rule; kept the rule",
     )
 
     @BeforeEach
@@ -108,6 +109,7 @@ class AiGenerateIntegrationTest(@Autowired val mvc: MockMvc) {
             jsonPath("$.model") { value("claude-sonnet-5") }
             jsonPath("$.usage.inputTokens") { value(11) }
             jsonPath("$.usage.outputTokens") { value(7) }
+            jsonPath("$.note") { value("tone contradicts X's punchy rule; kept the rule") }
         }
     }
 

@@ -60,7 +60,7 @@ class OpenAiCompatibleAdapter : AiProviderAdapter {
         val raw = completion.choices().joinToString("\n") { it.message().content().orElse(null) ?: "" }
         val usage = completion.usage().orElse(null)
         return GenerationContract.assembleResult(
-            entries = GenerationContract.parseGenerated(raw, command.platforms),
+            parsed = GenerationContract.parseGenerated(raw, command.platforms),
             inputTokens = usage?.promptTokens() ?: 0L,
             outputTokens = usage?.completionTokens() ?: 0L,
         )

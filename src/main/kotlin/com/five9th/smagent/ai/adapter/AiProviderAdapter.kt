@@ -77,6 +77,14 @@ data class GenerateResult(
     val overrides: Map<Platform, GeneratedContent> = emptyMap(),
     val inputTokens: Long = 0,
     val outputTokens: Long = 0,
+    /** Optional feedback to the user (e.g. a contradiction in the request); the model is told to use it sparingly. */
+    val note: String? = null,
+)
+
+/** What [GenerationContract.parseGenerated] hands back: the entries + the optional note. */
+data class ParsedGeneration(
+    val entries: Map<GeneratePlatform, GeneratedContent>,
+    val note: String? = null,
 )
 
 /** Upstream AI API failure (bad key, rejected request, outage, malformed model output). */

@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "com.five9th"
-version = "0.9.1"
+version = "0.9.2"
 description = "smagent"
 
 java {

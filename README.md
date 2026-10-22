@@ -1,6 +1,6 @@
 # SMAgent
 
-Version: <!-- gradle:version -->0.9.2<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.9.4<!-- /gradle:version -->
 
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a
@@ -43,7 +43,7 @@ it up together; losing the key makes stored credentials unrecoverable.
 
 | Env var                                                 | Purpose                                                   | Default                             |
 |---------------------------------------------------------|-----------------------------------------------------------|-------------------------------------|
-| `SMAGENT_ADMIN_PASSWORD`                                | Owner password, seeded on first start; fail-fast if unset | none                                |
+| `SMAGENT_ADMIN_PASSWORD`                                | Owner password; created on first start, then kept in sync with env while set (unset = keep stored) | none |
 | `SMAGENT_ADMIN_USERNAME`                                | Owner username                                            | `admin`                             |
 | `SMAGENT_ENCRYPTION_KEY`                                | base64 of 32 bytes; overrides the generated key file      | generated into `./data/smagent.key` |
 | `SMAGENT_CORS_ORIGINS` (`smagent.cors.allowed-origins`) | Allowed SPA origins                                       | `http://localhost:5173`             |

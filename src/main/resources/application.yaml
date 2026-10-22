@@ -36,7 +36,7 @@ management:
 smagent:
   base-url: ${APP_BASE_URL:http://localhost:8080}
   cors:
-    allowed-origins: http://localhost:5173
+    allowed-origins: http://localhost:8080
   admin:
     username: ${SMAGENT_ADMIN_USERNAME:admin}
     password: ${SMAGENT_ADMIN_PASSWORD:}

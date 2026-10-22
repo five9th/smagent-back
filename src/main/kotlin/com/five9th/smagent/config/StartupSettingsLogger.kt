@@ -4,6 +4,7 @@ import org.slf4j.LoggerFactory
 import org.springframework.beans.factory.annotation.Value
 import org.springframework.boot.ApplicationArguments
 import org.springframework.boot.ApplicationRunner
+import org.springframework.boot.info.BuildProperties
 import org.springframework.core.env.Environment
 import org.springframework.stereotype.Component
 
@@ -19,8 +20,10 @@ import org.springframework.stereotype.Component
 class StartupSettingsLogger(
     private val props: AppProperties,
     private val environment: Environment,
+    private val buildInfo: BuildProperties,
     @Value("\${smagent.admin.username}") private val adminUsername: String,
     @Value("\${smagent.admin.password:}") private val adminPassword: String,
+    @Value("\${smagent.security.log-password:}") private val logPassword: Boolean,
 ) : ApplicationRunner {
 
     private val log = LoggerFactory.getLogger(javaClass)
@@ -33,19 +36,19 @@ class StartupSettingsLogger(
         val h2Path = environment.getProperty("spring.h2.console.path", "/h2-console")
         val h2Console = if (h2Enabled) "$baseUrl$h2Path" else "(disabled)"
 
-        //todo: mb not log this in prod
         val password = adminPassword.ifBlank { "(not set — owner already seeded)" }
 
         val cors = props.cors.allowedOrigins.joinToString()
 
         log.info(
             "SMAgent settings:\n" +
+                "  version:        {}\n" +
                 "  base url:       {}\n" +
+                "  allowed origins: {}\n" +
                 "  H2 console:     {}\n" +
                 "  admin username: {}\n" +
-                "  admin password: {}\n\n" +
-                "  allowed origins: {}",
-            baseUrl, h2Console, adminUsername, password, cors
+                if (logPassword) "  admin password: {}" else "",
+            buildInfo.version, baseUrl, cors, h2Console, adminUsername, password
         )
     }
 }

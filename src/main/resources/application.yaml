@@ -43,6 +43,7 @@ smagent:
   security:
     encryption-key: ${SMAGENT_ENCRYPTION_KEY:}
     key-file: ./data/smagent.key
+    log-password: false
 
   facebook:
     graph-api-version: v26.0

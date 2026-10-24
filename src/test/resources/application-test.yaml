@@ -28,3 +28,7 @@ smagent:
     # same reason as linkedin above
     client-id: test-client-id
     client-secret: test-client-secret
+  facebook:
+    # same reason as linkedin above
+    client-id: test-client-id
+    client-secret: test-client-secret

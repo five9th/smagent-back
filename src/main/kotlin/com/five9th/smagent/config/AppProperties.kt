@@ -14,7 +14,21 @@ class AppProperties(
     /** SPA origins allowed to call the API (session cookie needs credentials). */
     class Cors(var allowedOrigins: List<String> = listOf("http://localhost:5173"))
 
-    class Facebook(var graphApiVersion: String = "v26.0")
+    /**
+     * OAuth note: the Login dialog URL is derived from [graphApiVersion]
+     * (`https://www.facebook.com/{v}/dialog/oauth`); the flow yields a user
+     * token, which the callback extends (fb_exchange_token) and trades for a
+     * non-expiring Page token via /me/accounts (see oauth/facebook).
+     */
+    class Facebook(
+        var baseUrl: String = "https://graph.facebook.com",
+        var graphApiVersion: String = "v26.0",
+        var callbackEndpoint: String = "/api/oauth/facebook/callback",
+        var scope: String = "pages_show_list,pages_manage_posts,pages_read_engagement",
+
+        var clientId: String = "",
+        var clientSecret: String = "",
+    )
 
     class Reddit(
         var baseUrl: String = "https://oauth.reddit.com",

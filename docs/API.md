@@ -24,6 +24,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Social account CRUD + verify        | ✅     | Credentials AES-GCM encrypted; IDs shown, tokens tail-masked, passwords hidden        |
 | Platform/login-option catalog       | ✅     | `GET /api/platforms` — drives the account-creation form                               |
 | Facebook Page publishing            | ✅     | Graph API v26.0, live-tested                                                          |
+| Facebook token via OAuth            | ✅     | `GET /api/oauth/facebook/*` — Login flow chained into a non-expiring Page token       |
 | Reddit publishing                   | ⛔     | Adapter implemented; Reddit closed free API access — credentials unobtainable for now |
 | LinkedIn publishing                 | ✅     | Member + company page via `POST /rest/posts` (text, optional link); tokens expire ~60 days |
 | LinkedIn token via OAuth            | ✅     | `GET /api/oauth/linkedin/*` — member + company page (scopes picked by login option) |
@@ -266,6 +267,71 @@ If the `authMethod` is different from the current one for this account and `merg
 returns `400` "Can't merge the credentials while also changing the `authMethod` from `account.authMethod` to `request.authMethod`".
 It is recommended to always pass the `authMethod` when merging credentials to make sure you don't accidentally merge
 credentials for a wrong auth method.
+
+---
+
+## OAuth (Facebook)
+
+Gets a fresh, effectively **non-expiring** `pageAccessToken` for a Facebook
+`PAGE_ACCESS_TOKEN` account. The Login dialog alone yields only a short-lived
+*user* token, so the callback chains three server-to-server GETs (the client
+secret never reaches the SPA):
+
+1. `code` → short-lived user token (`GET /{v}/oauth/access_token`)
+2. → ~60-day long-lived user token (`grant_type=fb_exchange_token`)
+3. → `GET /{v}/me/accounts` lists the user's Pages, each with its own Page
+   token — a Page token derived from a long-lived user token has no expiry.
+   The entry whose `id` matches the account's stored `pageId` is merged in
+   as `pageAccessToken` (the intermediate user token is discarded).
+
+Needs `FACEBOOK_CLIENT_ID` / `FACEBOOK_CLIENT_SECRET` (see README) and
+`smagent.base-url` set to the public origin — it builds both the
+app-registered redirect URL and the SPA landing page.
+
+| Method | Path                                  | Description                                          |
+|--------|---------------------------------------|------------------------------------------------------|
+| GET    | `/api/oauth/facebook/authorize/{id}`  | Start the flow for account `{id}` → 302 to Facebook  |
+| GET    | `/api/oauth/facebook/callback`        | Facebook's redirect target; ends the flow → 302 to the SPA |
+
+Client flow (SPA POV) — same shape as LinkedIn/X:
+
+1. Create the account with the **real `pageId`** and a placeholder
+   `pageAccessToken` (the flow matches the Page token by it), keeping the
+   returned account `id`. For an existing account, skip to step 2.
+2. Send the browser to `/api/oauth/facebook/authorize/{id}` (top-level
+   navigation — the session cookie must ride along).
+3. The user approves on Facebook and is bounced back through `/callback`;
+   smagent runs the token chain and **merges** the Page token into the
+   account (like `PUT ?mergeCredentials=true`: `status` → `UNVERIFIED`).
+   The browser lands on the SPA accounts page — `{base-url}/accounts`, or
+   `{base-url}/accounts?oauthError=...` when anything failed.
+
+### GET /api/oauth/facebook/authorize/{id}
+
+`302` to the Login dialog (`response_type=code`, the configured client id,
+the scopes `pages_show_list,pages_manage_posts,pages_read_engagement`, and a
+random `state`). The state and the target account travel together in the
+server session — the callback path itself is constant
+(`{base-url}/api/oauth/facebook/callback`; register exactly this URL in the
+app console under Facebook Login → Valid OAuth redirect URIs). One pending
+OAuth per session: starting a second flow overwrites the first.
+
+The account is validated up front: unknown id → `404`, a non-Facebook
+account, a login option with no OAuth flow (e.g. `PROFILE_URL`), or a missing
+`pageId` → `400` — as JSON, not redirects, because unlike the callback these
+are SPA bugs. Requires authentication → `401`.
+
+### GET /api/oauth/facebook/callback
+
+Browser-facing terminal leg — Facebook calls it top-level with `code` +
+`state` (or `error` + `error_reason`/`error_description` on denial). Validates
+the state (constant-time, single-use), runs the token chain, merges the Page
+token, and `302`s to the accounts page. Every expected failure still ends in
+that redirect with a human-readable `oauthError` query param — the same
+failure set as LinkedIn's callback, plus: the stored `pageId` not being among
+the Pages the user manages (the message lists the ones that were found), and
+any of the three Graph calls failing (Graph's error message surfaced).
+Unexpected server errors still `500` loudly. Requires authentication → `401`.
 
 ---
 

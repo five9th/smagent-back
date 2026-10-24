@@ -46,7 +46,13 @@ smagent:
     log-password: false
 
   facebook:
+    base-url: https://graph.facebook.com
     graph-api-version: v26.0
+    callback-endpoint: /api/oauth/facebook/callback
+    scope: "pages_show_list,pages_manage_posts,pages_read_engagement"
+
+    client-id: ${FACEBOOK_CLIENT_ID}
+    client-secret: ${FACEBOOK_CLIENT_SECRET}
 
   reddit:
     base-url: https://oauth.reddit.com

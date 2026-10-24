@@ -48,6 +48,8 @@ it up together; losing the key makes stored credentials unrecoverable.
 | `SMAGENT_ENCRYPTION_KEY`                                | base64 of 32 bytes; overrides the generated key file      | generated into `./data/smagent.key` |
 | `SMAGENT_CORS_ORIGINS` (`smagent.cors.allowed-origins`) | Allowed SPA origins                                       | `http://localhost:5173`             |
 | `APP_BASE_URL` (`smagent.base-url`)                     | Public origin — builds the OAuth redirect/landing URLs   | `http://localhost:8080`             |
+| `FACEBOOK_CLIENT_ID` (`smagent.facebook.client-id`)     | Facebook app id (OAuth Page token flow)                  | placeholder                          |
+| `FACEBOOK_CLIENT_SECRET` (`smagent.facebook.client-secret`) | Facebook app secret (OAuth Page token flow)          | placeholder                          |
 | `LINKEDIN_CLIENT_ID` (`smagent.linkedin.client-id`)     | LinkedIn app client id (OAuth token flow)                | placeholder                          |
 | `LINKEDIN_CLIENT_SECRET` (`smagent.linkedin.client-secret`) | LinkedIn app client secret (OAuth token flow)         | placeholder                          |
 | `X_CLIENT_ID` (`smagent.x.client-id`)                   | X app OAuth2 client id                                   | placeholder                          |
@@ -64,10 +66,21 @@ the port unexposed except through the proxy.
 ## Getting platform credentials
 
 **Facebook Page**
-1. Create an app at developers.facebook.com (type: Business).
-2. Get a User access token with `pages_show_list`, `pages_manage_posts`,
-   `pages_read_engagement` (Graph API Explorer helps).
-3. Exchange it for a long-lived User token, then fetch the Page token —
+1. Create an app at developers.facebook.com (type: Business) and add the
+   Facebook Login product.
+2. **Preferred — let the app fetch the token**: set `FACEBOOK_CLIENT_ID` /
+   `FACEBOOK_CLIENT_SECRET`, register `{APP_BASE_URL}/api/oauth/facebook/callback`
+   under Facebook Login → Settings → Valid OAuth redirect URIs, then create
+   the account with the target `pageId` and a placeholder token and hit
+   `GET /api/oauth/facebook/authorize/{accountId}` from the browser (the
+   SPA's "get token with OAuth" button; see docs/API.md → OAuth). The flow
+   logs you in, extends the token and stores the matching Page's
+   non-expiring token — the whole Graph API Explorer ritual automated.
+   A dev-mode app is enough for your own account (no review needed for
+   users with a role on the app).
+3. **Manual alternative**: get a User access token with `pages_show_list`,
+   `pages_manage_posts`, `pages_read_engagement` (Graph API Explorer helps),
+   exchange it for a long-lived User token, then fetch the Page token —
    long-lived Page tokens effectively do not expire.
 4. Store as `{ "pageId": "...", "pageAccessToken": "..." }`.
 
@@ -182,6 +195,9 @@ GET    /api/social-accounts/{id}
 PUT    /api/social-accounts/{id}?mergeCredentials=   {displayName?, authMethod?, credentials?}
 DELETE /api/social-accounts/{id}                              soft delete, creds dropped
 POST   /api/social-accounts/{id}/verify                        cheap "who am I" call
+
+GET    /api/oauth/facebook/authorize/{id}                      302 to Facebook Login (Page token flow)
+GET    /api/oauth/facebook/callback                            Facebook's redirect target -> 302 to the SPA
 
 GET    /api/oauth/linkedin/authorize/{id}                      302 to LinkedIn consent (token flow)
 GET    /api/oauth/linkedin/callback                            LinkedIn's redirect target -> 302 to the SPA

@@ -1,6 +1,6 @@
 # SMAgent
 
-Version: <!-- gradle:version -->0.9.5<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.10.0<!-- /gradle:version -->
 
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a

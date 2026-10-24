@@ -54,6 +54,25 @@ class FacebookOAuthService(
 
     private val mapper = JsonMapper.builder().build()
 
+    private val log = org.slf4j.LoggerFactory.getLogger(javaClass) // TODO temp debug logging, remove
+
+    /**
+     * TODO temp debug logging — remove. Logs one Graph GET (full URL incl.
+     * secrets) and its raw body, or the error body when it fails, then
+     * rethrows so the caller's translation logic is unchanged.
+     */
+    private fun loggedGet(step: String, url: String, call: () -> String): String {
+        log.info("FB OAuth {} request: GET {}", step, url)
+        return try {
+            val body = call()
+            log.info("FB OAuth {} response: {}", step, body)
+            body
+        } catch (e: RestClientResponseException) {
+            log.warn("FB OAuth {} error response: {} {} body={}", step, e.statusCode.value(), e.statusText, e.responseBodyAsString)
+            throw e
+        }
+    }
+
     private val callbackUrl: String = props.baseUrl + props.facebook.callbackEndpoint
     private val oauthFinishedRedirectUrl: String = props.baseUrl + "/accounts" // frontend page
 
@@ -73,12 +92,15 @@ class FacebookOAuthService(
         val state = randomState()
         request.getSession(true).setAttribute(PENDING_OAUTH_SESSION_KEY, "$accountId:$state")
 
-        return "https://www.facebook.com/${props.facebook.graphApiVersion}/dialog/oauth?" +
+        // TODO temp debug logging, remove
+        val dialogUrl = "https://www.facebook.com/${props.facebook.graphApiVersion}/dialog/oauth?" +
             "client_id=${props.facebook.clientId}&" +
             "redirect_uri=${urlEncoded(callbackUrl)}&" +
             "state=$state&" +
             "scope=${urlEncoded(props.facebook.scope)}&" +
             "response_type=code"
+        log.info("FB OAuth authorize request: redirect to {}", dialogUrl) // TODO temp debug logging, remove
+        return dialogUrl
     }
 
     /** Only the Page token login option has an OAuth flow; anything else fails here (400/404). */
@@ -105,6 +127,7 @@ class FacebookOAuthService(
      * Returns the redirect URL that brings the user back to the SPA.
      */
     fun handleCallback(request: HttpServletRequest, code: String, state: String): String {
+        log.info("FB OAuth callback: code={} state={}", code, state) // TODO temp debug logging, remove
         val accountId = consumePendingOAuth(request, state)
 
         val shortLived = exchangeCodeForAccessToken(code)
@@ -146,18 +169,26 @@ class FacebookOAuthService(
 
     /** Authorization-code exchange: GET with the app secret in the query (Meta's documented form). */
     private fun exchangeCodeForAccessToken(code: String): FacebookTokenResponse = try {
-        restClient.get()
-            .uri { b ->
-                b.path("/{v}/oauth/access_token")
-                    .queryParam("client_id", props.facebook.clientId)
-                    .queryParam("redirect_uri", callbackUrl)
-                    .queryParam("client_secret", props.facebook.clientSecret)
-                    .queryParam("code", code)
-                    .build(props.facebook.graphApiVersion)
+        parseTokenResponse(
+            loggedGet(
+                "code exchange",
+                "${props.facebook.baseUrl}/${props.facebook.graphApiVersion}/oauth/access_token" +
+                    "?client_id=${props.facebook.clientId}&redirect_uri=$callbackUrl" +
+                    "&client_secret=${props.facebook.clientSecret}&code=$code",
+            ) {
+                restClient.get()
+                    .uri { b ->
+                        b.path("/{v}/oauth/access_token")
+                            .queryParam("client_id", props.facebook.clientId)
+                            .queryParam("redirect_uri", callbackUrl)
+                            .queryParam("client_secret", props.facebook.clientSecret)
+                            .queryParam("code", code)
+                            .build(props.facebook.graphApiVersion)
+                    }
+                    .retrieve()
+                    .body(String::class.java) ?: ""
             }
-            .retrieve()
-            .body(FacebookTokenResponse::class.java)
-            ?: throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "Facebook returned an empty token response")
+        )
     } catch (e: RestClientResponseException) {
         throw ResponseStatusException(
             HttpStatus.BAD_GATEWAY,
@@ -172,18 +203,26 @@ class FacebookOAuthService(
 
     /** Short-lived user token -> ~60d long-lived user token; Page tokens derived from it don't expire. */
     private fun extendToLongLived(shortLivedToken: String): FacebookTokenResponse = try {
-        restClient.get()
-            .uri { b ->
-                b.path("/{v}/oauth/access_token")
-                    .queryParam("grant_type", "fb_exchange_token")
-                    .queryParam("client_id", props.facebook.clientId)
-                    .queryParam("client_secret", props.facebook.clientSecret)
-                    .queryParam("fb_exchange_token", shortLivedToken)
-                    .build(props.facebook.graphApiVersion)
+        parseTokenResponse(
+            loggedGet(
+                "token extension",
+                "${props.facebook.baseUrl}/${props.facebook.graphApiVersion}/oauth/access_token" +
+                    "?grant_type=fb_exchange_token&client_id=${props.facebook.clientId}" +
+                    "&client_secret=${props.facebook.clientSecret}&fb_exchange_token=$shortLivedToken",
+            ) {
+                restClient.get()
+                    .uri { b ->
+                        b.path("/{v}/oauth/access_token")
+                            .queryParam("grant_type", "fb_exchange_token")
+                            .queryParam("client_id", props.facebook.clientId)
+                            .queryParam("client_secret", props.facebook.clientSecret)
+                            .queryParam("fb_exchange_token", shortLivedToken)
+                            .build(props.facebook.graphApiVersion)
+                    }
+                    .retrieve()
+                    .body(String::class.java) ?: ""
             }
-            .retrieve()
-            .body(FacebookTokenResponse::class.java)
-            ?: throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "Facebook returned an empty token response")
+        )
     } catch (e: RestClientResponseException) {
         throw ResponseStatusException(
             HttpStatus.BAD_GATEWAY,
@@ -205,15 +244,21 @@ class FacebookOAuthService(
     private fun pageTokenForStoredPage(accountId: Long, longLivedToken: String): String {
         val accounts: JsonNode = try {
             mapper.readTree(
-                restClient.get()
-                    .uri { b ->
-                        b.path("/{v}/me/accounts")
-                            .queryParam("fields", "id,name,access_token")
-                            .queryParam("access_token", longLivedToken)
-                            .build(props.facebook.graphApiVersion)
-                    }
-                    .retrieve()
-                    .body(String::class.java) ?: ""
+                loggedGet(
+                    "page list",
+                    "${props.facebook.baseUrl}/${props.facebook.graphApiVersion}/me/accounts" +
+                        "?fields=id,name,access_token&access_token=$longLivedToken",
+                ) {
+                    restClient.get()
+                        .uri { b ->
+                            b.path("/{v}/me/accounts")
+                                .queryParam("fields", "id,name,access_token")
+                                .queryParam("access_token", longLivedToken)
+                                .build(props.facebook.graphApiVersion)
+                        }
+                        .retrieve()
+                        .body(String::class.java) ?: ""
+                }
             )
         } catch (e: RestClientResponseException) {
             throw ResponseStatusException(
@@ -267,6 +312,13 @@ class FacebookOAuthService(
             ?: e.statusText
     } catch (_: Exception) {
         e.statusText
+    }
+
+    private fun parseTokenResponse(body: String): FacebookTokenResponse {
+        if (body.isBlank()) {
+            throw ResponseStatusException(HttpStatus.BAD_GATEWAY, "Facebook returned an empty token response")
+        }
+        return mapper.readValue(body, FacebookTokenResponse::class.java)
     }
 
     private fun JsonNode.asStringOrNull(): String? =

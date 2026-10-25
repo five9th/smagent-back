@@ -52,6 +52,7 @@ class SettingsService(
         clientSecret = resolve(X_CLIENT_SECRET, props.x.clientSecret),
     )
 
+    // TODO: this Should be isOverridden() instead
     /** True when the key resolves to a non-blank value (override or config). */
     fun isConfigured(key: SettingKey): Boolean = when (key) {
         SettingKey.FACEBOOK_CLIENT_ID -> facebook().clientId.isNotBlank()

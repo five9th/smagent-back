@@ -45,6 +45,8 @@ smagent:
     key-file: ./data/smagent.key
     log-password: false
 
+# The client ID and secret for every app may be set in the config or by the user at runtime via /api/admin
+# Note that the values set via /api/admin are stored in DB, survive restarts and OVERRIDE those in config
   facebook:
     base-url: https://graph.facebook.com
     graph-api-version: v26.0

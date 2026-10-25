@@ -1,6 +1,6 @@
 # SMAgent
 
-Version: <!-- gradle:version -->0.10.1<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.11.0<!-- /gradle:version -->
 
 Single-owner backend for AI-assisted social media posting. Multi-account publishing
 to platform APIs via per-platform adapters, encrypted credential storage, and a
@@ -54,6 +54,10 @@ it up together; losing the key makes stored credentials unrecoverable.
 | `LINKEDIN_CLIENT_SECRET` (`smagent.linkedin.client-secret`) | LinkedIn app client secret (OAuth token flow)         | placeholder                          |
 | `X_CLIENT_ID` (`smagent.x.client-id`)                   | X app OAuth2 client id                                   | placeholder                          |
 | `X_CLIENT_SECRET` (`smagent.x.client-secret`)           | X app OAuth2 client secret                               | placeholder                          |
+
+OAuth app credentials (`clientId`/`clientSecret` for Facebook, LinkedIn, X) can
+also be set at runtime via `PUT /api/admin/settings` — a runtime value overrides
+the config one (see docs/API.md → Admin settings).
 
 ### Deploying on a VPS
 

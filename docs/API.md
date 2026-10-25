@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.10.1<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.11.0<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -36,6 +36,7 @@ the two public actuator endpoints in [Operational endpoints](#operational-endpoi
 | Post management (drafts, overrides) | ✅     |                                                                                       |
 | Soft delete (accounts & posts)      | ✅     | History preserved; `showDeleted` reveals; creds dropped on account delete             |
 | Demo feedback list                  | ✅     | Demo-only; standalone items, no relations, no soft delete                             |
+| Runtime app settings                | ✅     | `PUT/GET /api/admin/settings` — OAuth app credentials settable at runtime              |
 | Health & version endpoints          | ✅     | `/actuator/health`, `/actuator/info` — no auth, only exposed actuator endpoints       |
 | Delete published post on platform   | ❌     | `deletePublications=true` returns `501` until implemented                             |
 | Engagement tracking (comments etc.) | ❌     | Design below                                                                          |
@@ -685,6 +686,37 @@ deleted for real.
 
 `POST` body: `{ "text": "..." }` (required, non-blank). `PATCH` body: any of
 `{ "text": "...", "checked": true }`. Blank text → `400`, unknown id → `404`.
+
+---
+
+## Admin settings
+
+Runtime overrides for the OAuth app credentials (`clientId`/`clientSecret` of
+Facebook, LinkedIn, X). A stored override wins over the yaml/env value; values
+are encrypted at rest and never returned.
+
+| Method | Path                   | Description                                     |
+|--------|------------------------|-------------------------------------------------|
+| PUT    | `/api/admin/settings`  | Replace the override set                        |
+| GET    | `/api/admin/settings`  | Which settings are configured (booleans only)   |
+
+**PUT** (204) — any subset of platforms/fields; The values can be updated only as a 
+whole blob - PUT deletes all stored overrides, then saves only what's in the request body
+so omitted fields clear back to config values:
+
+```json
+{ "x": { "clientId": "...", "clientSecret": "..." } }
+```
+
+Blank values → `400`.
+
+**GET**:
+
+```json
+{ "facebook": { "clientIdSet": true, "clientSecretSet": true },
+  "linkedin": { "clientIdSet": false, "clientSecretSet": false },
+  "x":        { "clientIdSet": true,  "clientSecretSet": false } }
+```
 
 ## Operational endpoints
 

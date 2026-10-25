@@ -6,6 +6,7 @@ import com.five9th.smagent.account.UpdateAccountRequest
 import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.settings.SettingsService
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import org.springframework.http.MediaType
@@ -45,6 +46,7 @@ class XOAuthService(
     private val props: AppProperties,
     restClientBuilder: RestClient.Builder,
     private val accountService: SocialAccountService,
+    private val settings: SettingsService, // app credentials: DB override over config
 ) {
 
     private val restClient = restClientBuilder
@@ -74,9 +76,10 @@ class XOAuthService(
         val verifier = randomToken()
         request.getSession(true).setAttribute(PENDING_OAUTH_SESSION_KEY, "$accountId:$state:$verifier")
 
+        val creds = settings.x()
         return props.x.authorizeUrl + "?" +
             "response_type=code&" +
-            "client_id=${props.x.clientId}&" +
+            "client_id=${creds.clientId}&" +
             "redirect_uri=${urlEncoded(callbackUrl)}&" +
             "scope=${urlEncoded(props.x.scope)}&" +
             "state=$state&" +
@@ -146,6 +149,7 @@ class XOAuthService(
      * (LinkedIn puts clientId/secret in the form instead).
      */
     private fun exchangeCodeForAccessToken(code: String, codeVerifier: String): XTokenResponse {
+        val creds = settings.x()
         val form = LinkedMultiValueMap<String, String>().apply {
             add("grant_type", "authorization_code")
             add("code", code)
@@ -158,7 +162,7 @@ class XOAuthService(
         return try {
             restClient.post()
                 .uri("/2/oauth2/token")
-                .headers { it.setBasicAuth(props.x.clientId, props.x.clientSecret) }
+                .headers { it.setBasicAuth(creds.clientId, creds.clientSecret) }
                 .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                 .body(form)
                 .retrieve()

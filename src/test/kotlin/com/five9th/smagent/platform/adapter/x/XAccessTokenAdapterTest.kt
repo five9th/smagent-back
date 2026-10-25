@@ -2,6 +2,9 @@ package com.five9th.smagent.platform.adapter.x
 
 import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.platform.PlatformException
+import com.five9th.smagent.settings.SettingsService
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.whenever
 import com.five9th.smagent.platform.PublishCommand
 import java.util.Base64
 import kotlin.test.assertEquals
@@ -29,15 +32,18 @@ class XAccessTokenAdapterTest {
 
     private val builder = RestClient.builder()
     private val server = MockRestServiceServer.bindTo(builder).build()
+    private val settings = mock<SettingsService>()
     private val adapter = XAccessTokenAdapter(
-        AppProperties().apply {
-            x.clientId = "cid"
-            x.clientSecret = "csec"
-        },
+        AppProperties(),
         builder,
+        settings,
     )
 
     private val creds = """{"accessToken":"tok","refreshToken":"rtok"}"""
+
+    init {
+        whenever(settings.x()).thenReturn(SettingsService.ClientCredentials("cid", "csec"))
+    }
 
     private fun basicAuth() =
         "Basic " + Base64.getEncoder().encodeToString("cid:csec".toByteArray())

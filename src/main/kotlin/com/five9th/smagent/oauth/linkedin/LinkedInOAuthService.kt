@@ -6,6 +6,7 @@ import com.five9th.smagent.account.UpdateAccountRequest
 import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.settings.SettingsService
 import jakarta.servlet.http.HttpServletRequest
 import org.springframework.http.HttpStatus
 import tools.jackson.databind.JsonNode
@@ -41,7 +42,8 @@ import java.util.*
 class LinkedInOAuthService(
     private val props: AppProperties,
     restClientBuilder: RestClient.Builder,
-    private val accountService: SocialAccountService // is it ok architecturally ??
+    private val accountService: SocialAccountService, // is it ok architecturally ??
+    private val settings: SettingsService, // app credentials: DB override over config
 ) {
 
     private val restClient = restClientBuilder
@@ -103,9 +105,10 @@ class LinkedInOAuthService(
     }
 
     private fun buildAuthorizationUrl(state: String, scope: String): String {
+        val creds = settings.linkedin()
         return "https://www.linkedin.com/oauth/v2/authorization?" +
                 "response_type=code&" +
-                "client_id=${props.linkedin.clientId}&" +
+                "client_id=${creds.clientId}&" +
                 "redirect_uri=${urlEncoded(callbackUrl)}&" +
                 "state=$state&" +
                 "scope=${urlEncoded(scope)}"
@@ -149,11 +152,12 @@ class LinkedInOAuthService(
     }
 
      private fun exchangeCodeForAccessToken(code: String): LinkedInTokenResponse {
+        val creds = settings.linkedin()
         val form = LinkedMultiValueMap<String, String>().apply {
             add("grant_type", "authorization_code")
             add("code", code)
-            add("client_id", props.linkedin.clientId)
-            add("client_secret", props.linkedin.clientSecret)
+            add("client_id", creds.clientId)
+            add("client_secret", creds.clientSecret)
             // must byte-match the authorize leg's redirect_uri — both are the
             // constant [callbackUrl]
             add("redirect_uri", callbackUrl)

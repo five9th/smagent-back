@@ -6,6 +6,7 @@ import com.five9th.smagent.account.UpdateAccountRequest
 import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.domain.AuthMethod
 import com.five9th.smagent.domain.Platform
+import com.five9th.smagent.settings.SettingsService
 import jakarta.servlet.http.HttpServletRequest
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -46,6 +47,7 @@ class FacebookOAuthService(
     private val props: AppProperties,
     restClientBuilder: RestClient.Builder,
     private val accountService: SocialAccountService,
+    private val settings: SettingsService, // app credentials: DB override over config
 ) {
 
     private val restClient = restClientBuilder
@@ -93,8 +95,9 @@ class FacebookOAuthService(
         request.getSession(true).setAttribute(PENDING_OAUTH_SESSION_KEY, "$accountId:$state")
 
         // TODO temp debug logging, remove
+        val creds = settings.facebook()
         val dialogUrl = "https://www.facebook.com/${props.facebook.graphApiVersion}/dialog/oauth?" +
-            "client_id=${props.facebook.clientId}&" +
+            "client_id=${creds.clientId}&" +
             "redirect_uri=${urlEncoded(callbackUrl)}&" +
             "state=$state&" +
             "scope=${urlEncoded(props.facebook.scope)}&" +
@@ -169,19 +172,20 @@ class FacebookOAuthService(
 
     /** Authorization-code exchange: GET with the app secret in the query (Meta's documented form). */
     private fun exchangeCodeForAccessToken(code: String): FacebookTokenResponse = try {
+        val creds = settings.facebook()
         parseTokenResponse(
             loggedGet(
                 "code exchange",
                 "${props.facebook.baseUrl}/${props.facebook.graphApiVersion}/oauth/access_token" +
-                    "?client_id=${props.facebook.clientId}&redirect_uri=$callbackUrl" +
-                    "&client_secret=${props.facebook.clientSecret}&code=$code",
+                    "?client_id=${creds.clientId}&redirect_uri=$callbackUrl" +
+                    "&client_secret=${creds.clientSecret}&code=$code",
             ) {
                 restClient.get()
                     .uri { b ->
                         b.path("/{v}/oauth/access_token")
-                            .queryParam("client_id", props.facebook.clientId)
+                            .queryParam("client_id", creds.clientId)
                             .queryParam("redirect_uri", callbackUrl)
-                            .queryParam("client_secret", props.facebook.clientSecret)
+                            .queryParam("client_secret", creds.clientSecret)
                             .queryParam("code", code)
                             .build(props.facebook.graphApiVersion)
                     }
@@ -203,19 +207,20 @@ class FacebookOAuthService(
 
     /** Short-lived user token -> ~60d long-lived user token; Page tokens derived from it don't expire. */
     private fun extendToLongLived(shortLivedToken: String): FacebookTokenResponse = try {
+        val creds = settings.facebook()
         parseTokenResponse(
             loggedGet(
                 "token extension",
                 "${props.facebook.baseUrl}/${props.facebook.graphApiVersion}/oauth/access_token" +
-                    "?grant_type=fb_exchange_token&client_id=${props.facebook.clientId}" +
-                    "&client_secret=${props.facebook.clientSecret}&fb_exchange_token=$shortLivedToken",
+                    "?grant_type=fb_exchange_token&client_id=${creds.clientId}" +
+                    "&client_secret=${creds.clientSecret}&fb_exchange_token=$shortLivedToken",
             ) {
                 restClient.get()
                     .uri { b ->
                         b.path("/{v}/oauth/access_token")
                             .queryParam("grant_type", "fb_exchange_token")
-                            .queryParam("client_id", props.facebook.clientId)
-                            .queryParam("client_secret", props.facebook.clientSecret)
+                            .queryParam("client_id", creds.clientId)
+                            .queryParam("client_secret", creds.clientSecret)
                             .queryParam("fb_exchange_token", shortLivedToken)
                             .build(props.facebook.graphApiVersion)
                     }

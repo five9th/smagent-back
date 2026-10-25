@@ -10,6 +10,7 @@ import com.five9th.smagent.platform.PublishCommand
 import com.five9th.smagent.platform.PublishResult
 import com.five9th.smagent.platform.SocialPlatformAdapter
 import com.five9th.smagent.platform.VerifyResult
+import com.five9th.smagent.settings.SettingsService
 import org.springframework.http.MediaType
 import org.springframework.stereotype.Component
 import org.springframework.util.LinkedMultiValueMap
@@ -41,6 +42,7 @@ import tools.jackson.databind.json.JsonMapper
 class XAccessTokenAdapter(
     props: AppProperties,
     restClientBuilder: RestClient.Builder,
+    private val settings: SettingsService, // app credentials: DB override over config
 ) : SocialPlatformAdapter {
 
     override val platform = Platform.X
@@ -149,11 +151,12 @@ class XAccessTokenAdapter(
         form.add("grant_type", "refresh_token")
         form.add("refresh_token", refreshToken)
 
+        val app = settings.x()
         val body: JsonNode = try {
             mapper.readTree(
                 client.post()
                     .uri("/2/oauth2/token")
-                    .headers { it.setBasicAuth(x.clientId, x.clientSecret) }
+                    .headers { it.setBasicAuth(app.clientId, app.clientSecret) }
                     .contentType(MediaType.APPLICATION_FORM_URLENCODED)
                     .body(form)
                     .retrieve()

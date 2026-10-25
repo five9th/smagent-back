@@ -1,6 +1,7 @@
 package com.five9th.smagent.repo
 
 import com.five9th.smagent.domain.AiProvider
+import com.five9th.smagent.domain.AppSetting
 import com.five9th.smagent.domain.AppUser
 import com.five9th.smagent.domain.FeedbackItem
 import com.five9th.smagent.domain.GenerationSettings
@@ -37,6 +38,8 @@ interface PublicationRepository : JpaRepository<Publication, Long> {
 interface FeedbackItemRepository : JpaRepository<FeedbackItem, Long> {
     fun findAllByOrderByCreatedAtDesc(): List<FeedbackItem>
 }
+
+interface AppSettingRepository : JpaRepository<AppSetting, String>
 
 interface AiProviderRepository : JpaRepository<AiProvider, Long> {
     fun findAllByOrderByCreatedAtDesc(): List<AiProvider>

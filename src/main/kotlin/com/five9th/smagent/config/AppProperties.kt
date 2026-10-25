@@ -4,15 +4,15 @@ import org.springframework.boot.context.properties.ConfigurationProperties
 
 @ConfigurationProperties(prefix = "smagent")
 class AppProperties(
-    var baseUrl: String = "",
-    var cors: Cors = Cors(),
-    var facebook: Facebook = Facebook(),
-    var reddit: Reddit = Reddit(),
-    var linkedin: LinkedIn = LinkedIn(),
-    var x: X = X(),
+    val baseUrl: String = "",
+    val cors: Cors = Cors(),
+    val facebook: Facebook = Facebook(),
+    val reddit: Reddit = Reddit(),
+    val linkedin: LinkedIn = LinkedIn(),
+    val x: X = X(),
 ) {
     /** SPA origins allowed to call the API (session cookie needs credentials). */
-    class Cors(var allowedOrigins: List<String> = listOf("http://localhost:5173"))
+    class Cors(val allowedOrigins: List<String> = listOf("http://localhost:5173"))
 
     /**
      * OAuth note: the Login dialog URL is derived from [graphApiVersion]
@@ -21,30 +21,30 @@ class AppProperties(
      * non-expiring Page token via /me/accounts (see oauth/facebook).
      */
     class Facebook(
-        var baseUrl: String = "https://graph.facebook.com",
-        var graphApiVersion: String = "v26.0",
-        var callbackEndpoint: String = "/api/oauth/facebook/callback",
-        var scope: String = "pages_show_list,pages_manage_posts,pages_read_engagement",
+        val baseUrl: String = "https://graph.facebook.com",
+        val graphApiVersion: String = "v26.0",
+        val callbackEndpoint: String = "/api/oauth/facebook/callback",
+        val scope: String = "pages_show_list,pages_manage_posts,pages_read_engagement",
 
-        var clientId: String = "",
-        var clientSecret: String = "",
+        val clientId: String = "",
+        val clientSecret: String = "",
     )
 
     class Reddit(
-        var baseUrl: String = "https://oauth.reddit.com",
-        var tokenUrl: String = "https://www.reddit.com/api/v1/access_token",
+        val baseUrl: String = "https://oauth.reddit.com",
+        val tokenUrl: String = "https://www.reddit.com/api/v1/access_token",
     )
 
     /** apiVersion is the LinkedIn-Version header (YYYYMM); each lives ~12 months. */
     class LinkedIn(
-        var baseUrl: String = "https://api.linkedin.com",
-        var apiVersion: String = "202609",
-        var callbackEndpoint: String = "/",
-        var scopePersonal: String = "",
-        var scopeCompany: String = "",
+        val baseUrl: String = "https://api.linkedin.com",
+        val apiVersion: String = "202609",
+        val callbackEndpoint: String = "/",
+        val scopePersonal: String = "",
+        val scopeCompany: String = "",
 
-        var clientId: String = "",
-        var clientSecret: String = "",
+        val clientId: String = "",
+        val clientSecret: String = "",
     )
 
     /**
@@ -54,12 +54,12 @@ class AppProperties(
      * persists the rotated pair after each refresh (see XAccessTokenAdapter).
      */
     class X(
-        var baseUrl: String = "https://api.x.com",
-        var authorizeUrl: String = "https://x.com/i/oauth2/authorize",
-        var callbackEndpoint: String = "/api/oauth/x/callback",
-        var scope: String = "tweet.read tweet.write users.read offline.access",
+        val baseUrl: String = "https://api.x.com",
+        val authorizeUrl: String = "https://x.com/i/oauth2/authorize",
+        val callbackEndpoint: String = "/api/oauth/x/callback",
+        val scope: String = "tweet.read tweet.write users.read offline.access",
 
-        var clientId: String = "",
-        var clientSecret: String = "",
+        val clientId: String = "",
+        val clientSecret: String = "",
     )
 }

@@ -21,6 +21,16 @@ data class UpdateSettingsRequest(
     @field:Valid val x: PlatformCredentials? = null,
 )
 
+/** Well-known setting keys; [key] is the persisted identifier (app_settings.setting_key). */
+enum class SettingKey(val key: String) {
+    FACEBOOK_CLIENT_ID("facebook.client-id"),
+    FACEBOOK_CLIENT_SECRET("facebook.client-secret"),
+    LINKEDIN_CLIENT_ID("linkedin.client-id"),
+    LINKEDIN_CLIENT_SECRET("linkedin.client-secret"),
+    X_CLIENT_ID("x.client-id"),
+    X_CLIENT_SECRET("x.client-secret"),
+}
+
 /**
  * Runtime app settings. Persistence model: a stored row OVERRIDES the yaml/env
  * default (AppProperties) for its key; no row = use the config value. Overrides
@@ -38,30 +48,22 @@ class SettingsService(
     data class ClientCredentials(val clientId: String, val clientSecret: String)
 
     fun facebook() = ClientCredentials(
-        clientId = resolve(FACEBOOK_CLIENT_ID, props.facebook.clientId),
-        clientSecret = resolve(FACEBOOK_CLIENT_SECRET, props.facebook.clientSecret),
+        clientId = resolve(SettingKey.FACEBOOK_CLIENT_ID, props.facebook.clientId),
+        clientSecret = resolve(SettingKey.FACEBOOK_CLIENT_SECRET, props.facebook.clientSecret),
     )
 
     fun linkedin() = ClientCredentials(
-        clientId = resolve(LINKEDIN_CLIENT_ID, props.linkedin.clientId),
-        clientSecret = resolve(LINKEDIN_CLIENT_SECRET, props.linkedin.clientSecret),
+        clientId = resolve(SettingKey.LINKEDIN_CLIENT_ID, props.linkedin.clientId),
+        clientSecret = resolve(SettingKey.LINKEDIN_CLIENT_SECRET, props.linkedin.clientSecret),
     )
 
     fun x() = ClientCredentials(
-        clientId = resolve(X_CLIENT_ID, props.x.clientId),
-        clientSecret = resolve(X_CLIENT_SECRET, props.x.clientSecret),
+        clientId = resolve(SettingKey.X_CLIENT_ID, props.x.clientId),
+        clientSecret = resolve(SettingKey.X_CLIENT_SECRET, props.x.clientSecret),
     )
 
-    // TODO: this Should be isOverridden() instead
-    /** True when the key resolves to a non-blank value (override or config). */
-    fun isConfigured(key: SettingKey): Boolean = when (key) {
-        SettingKey.FACEBOOK_CLIENT_ID -> facebook().clientId.isNotBlank()
-        SettingKey.FACEBOOK_CLIENT_SECRET -> facebook().clientSecret.isNotBlank()
-        SettingKey.LINKEDIN_CLIENT_ID -> linkedin().clientId.isNotBlank()
-        SettingKey.LINKEDIN_CLIENT_SECRET -> linkedin().clientSecret.isNotBlank()
-        SettingKey.X_CLIENT_ID -> x().clientId.isNotBlank()
-        SettingKey.X_CLIENT_SECRET -> x().clientSecret.isNotBlank()
-    }
+    /** True when a runtime override row exists for the key (config value may differ). */
+    fun isOverridden(key: SettingKey): Boolean = settings.existsById(key.key)
 
     /**
      * PUT semantics: replaces the whole override set. Platform sections and
@@ -69,34 +71,23 @@ class SettingsService(
      * values are rejected (400 by the caller's validation).
      */
     fun replaceOverrides(request: UpdateSettingsRequest) {
-        val wanted: Map<String, String> = buildMap {
-            request.facebook?.clientId?.let { put(FACEBOOK_CLIENT_ID, it) }
-            request.facebook?.clientSecret?.let { put(FACEBOOK_CLIENT_SECRET, it) }
-            request.linkedin?.clientId?.let { put(LINKEDIN_CLIENT_ID, it) }
-            request.linkedin?.clientSecret?.let { put(LINKEDIN_CLIENT_SECRET, it) }
-            request.x?.clientId?.let { put(X_CLIENT_ID, it) }
-            request.x?.clientSecret?.let { put(X_CLIENT_SECRET, it) }
+        val wanted: Map<SettingKey, String> = buildMap {
+            request.facebook?.clientId?.let { put(SettingKey.FACEBOOK_CLIENT_ID, it) }
+            request.facebook?.clientSecret?.let { put(SettingKey.FACEBOOK_CLIENT_SECRET, it) }
+            request.linkedin?.clientId?.let { put(SettingKey.LINKEDIN_CLIENT_ID, it) }
+            request.linkedin?.clientSecret?.let { put(SettingKey.LINKEDIN_CLIENT_SECRET, it) }
+            request.x?.clientId?.let { put(SettingKey.X_CLIENT_ID, it) }
+            request.x?.clientSecret?.let { put(SettingKey.X_CLIENT_SECRET, it) }
         }
         settings.deleteAll()
         wanted.forEach { (key, value) ->
-            settings.save(AppSetting(key = key, valueEnc = crypto.encrypt(value)))
+            settings.save(AppSetting(key = key.key, valueEnc = crypto.encrypt(value)))
         }
     }
 
-    private fun resolve(key: String, configDefault: String): String {
-        val override = settings.findById(key).orElse(null) ?: return configDefault
+    private fun resolve(key: SettingKey, configDefault: String): String {
+        val override = settings.findById(key.key).orElse(null) ?: return configDefault
         return runCatching { crypto.decrypt(override.valueEnc) }
             .getOrElse { configDefault } // e.g. key file regenerated; config still works
-    }
-
-    enum class SettingKey { FACEBOOK_CLIENT_ID, FACEBOOK_CLIENT_SECRET, LINKEDIN_CLIENT_ID, LINKEDIN_CLIENT_SECRET, X_CLIENT_ID, X_CLIENT_SECRET }
-
-    companion object {
-        const val FACEBOOK_CLIENT_ID = "facebook.client-id"
-        const val FACEBOOK_CLIENT_SECRET = "facebook.client-secret"
-        const val LINKEDIN_CLIENT_ID = "linkedin.client-id"
-        const val LINKEDIN_CLIENT_SECRET = "linkedin.client-secret"
-        const val X_CLIENT_ID = "x.client-id"
-        const val X_CLIENT_SECRET = "x.client-secret"
     }
 }

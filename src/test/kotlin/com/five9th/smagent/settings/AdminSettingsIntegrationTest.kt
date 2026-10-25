@@ -34,8 +34,8 @@ class AdminSettingsIntegrationTest(
     @Test
     fun `status reports booleans only, never values`() {
         val body = mvc.get("/api/admin/settings").andReturn().response.contentAsString
-        assertTrue("clientIdSet" in body)
-        assertTrue("clientSecret" !in body.replace("clientSecretSet", ""), "no value-bearing field may appear")
+        assertTrue("clientIdOverridden" in body)
+        assertTrue("clientSecret" !in body.replace("clientSecretOverridden", ""), "no value-bearing field may appear")
     }
 
     @WithMockUser(roles = ["OWNER"])
@@ -50,12 +50,12 @@ class AdminSettingsIntegrationTest(
 
         assertEquals("runtime-x-id", settings.x().clientId, "override must win over config")
         assertEquals("runtime-x-secret", settings.x().clientSecret)
-        assertTrue(settings.isConfigured(SettingsService.SettingKey.X_CLIENT_ID))
+        assertTrue(settings.isOverridden(SettingKey.X_CLIENT_ID))
 
-        // GET reflects configured state
+        // GET reflects override state
         mvc.get("/api/admin/settings").andExpect {
-            jsonPath("$.x.clientIdSet") { value(true) }
-            jsonPath("$.x.clientSecretSet") { value(true) }
+            jsonPath("$.x.clientIdOverridden") { value(true) }
+            jsonPath("$.x.clientSecretOverridden") { value(true) }
         }
 
         // PUT replaces the whole set: omitted platform falls back to config
@@ -66,6 +66,12 @@ class AdminSettingsIntegrationTest(
 
         assertEquals(configDefault, settings.x().clientId, "omitted platform must clear its override")
         assertEquals("fb-id", settings.facebook().clientId)
+
+        // overridden flags track the override rows, not the resolved values
+        mvc.get("/api/admin/settings").andExpect {
+            jsonPath("$.x.clientIdOverridden") { value(false) }
+            jsonPath("$.facebook.clientIdOverridden") { value(true) }
+        }
     }
 
     @WithMockUser(roles = ["OWNER"])
@@ -85,7 +91,7 @@ class AdminSettingsIntegrationTest(
             content = """{"linkedin": {"clientId": "plain-li-id", "clientSecret": "plain-li-secret"}}"""
         }.andExpect { status { isNoContent() } }
 
-        val row = settingRepo.findById(SettingsService.LINKEDIN_CLIENT_ID).orElseThrow()
+        val row = settingRepo.findById(SettingKey.LINKEDIN_CLIENT_ID.key).orElseThrow()
         assertTrue("plain-li-id" !in row.valueEnc, "plaintext must not be stored")
         assertEquals("plain-li-id", crypto.decrypt(row.valueEnc))
     }

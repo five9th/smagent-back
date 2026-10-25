@@ -1,6 +1,5 @@
 package com.five9th.smagent.settings
 
-import com.five9th.smagent.settings.SettingsService.SettingKey
 import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
@@ -12,13 +11,14 @@ import org.springframework.web.bind.annotation.RestController
 
 /**
  * Owner-facing runtime settings. Values are write-only: PUT stores them
- * (encrypted), GET reports only whether each is configured — never values.
+ * (encrypted), GET reports only whether each is overridden at runtime —
+ * never values.
  */
 @RestController
 @RequestMapping("/api/admin/settings")
 class AdminSettingsController(private val settings: SettingsService) {
 
-    data class PlatformConfigured(val clientIdSet: Boolean, val clientSecretSet: Boolean)
+    data class PlatformConfigured(val clientIdOverridden: Boolean, val clientSecretOverridden: Boolean)
     data class SettingsStatus(
         val facebook: PlatformConfigured,
         val linkedin: PlatformConfigured,
@@ -31,17 +31,11 @@ class AdminSettingsController(private val settings: SettingsService) {
 
     @GetMapping
     fun status(): SettingsStatus = SettingsStatus(
-        facebook = PlatformConfigured(
-            settings.isConfigured(SettingKey.FACEBOOK_CLIENT_ID),
-            settings.isConfigured(SettingKey.FACEBOOK_CLIENT_SECRET),
-        ),
-        linkedin = PlatformConfigured(
-            settings.isConfigured(SettingKey.LINKEDIN_CLIENT_ID),
-            settings.isConfigured(SettingKey.LINKEDIN_CLIENT_SECRET),
-        ),
-        x = PlatformConfigured(
-            settings.isConfigured(SettingKey.X_CLIENT_ID),
-            settings.isConfigured(SettingKey.X_CLIENT_SECRET),
-        ),
+        facebook = configured(SettingKey.FACEBOOK_CLIENT_ID, SettingKey.FACEBOOK_CLIENT_SECRET),
+        linkedin = configured(SettingKey.LINKEDIN_CLIENT_ID, SettingKey.LINKEDIN_CLIENT_SECRET),
+        x = configured(SettingKey.X_CLIENT_ID, SettingKey.X_CLIENT_SECRET),
     )
+
+    private fun configured(clientId: SettingKey, clientSecret: SettingKey) =
+        PlatformConfigured(settings.isOverridden(clientId), settings.isOverridden(clientSecret))
 }

@@ -41,7 +41,8 @@ class AdminSettingsIntegrationTest(
     @WithMockUser(roles = ["OWNER"])
     @Test
     fun `put stores overrides that win over config and survive replace`() {
-        val configDefault = settings.x().clientId // set by the test profile yaml
+        val xIdConfigDefault = settings.x().clientId // set by the test profile yaml
+        val fbSecretConfigDefault = settings.facebook().clientSecret
 
         mvc.put("/api/admin/settings") {
             contentType = MediaType.APPLICATION_JSON
@@ -58,29 +59,33 @@ class AdminSettingsIntegrationTest(
             jsonPath("$.x.clientSecretOverridden") { value(true) }
         }
 
-        // PUT replaces the whole set: omitted platform falls back to config
+        // omitted platform/fields are untouched; a single field updates alone
         mvc.put("/api/admin/settings") {
             contentType = MediaType.APPLICATION_JSON
-            content = """{"facebook": {"clientId": "fb-id", "clientSecret": "fb-secret"}}"""
+            content = """{"facebook": {"clientId": "fb-id"}, "x": {"clientId": "x-id-2"}}"""
         }.andExpect { status { isNoContent() } }
 
-        assertEquals(configDefault, settings.x().clientId, "omitted platform must clear its override")
+        assertEquals("x-id-2", settings.x().clientId)
+        assertEquals("runtime-x-secret", settings.x().clientSecret, "untouched field keeps its override")
         assertEquals("fb-id", settings.facebook().clientId)
+        assertEquals(fbSecretConfigDefault, settings.facebook().clientSecret, "field never overridden falls back to config")
+
+        // "" clears one field's override without touching its sibling
+        mvc.put("/api/admin/settings") {
+            contentType = MediaType.APPLICATION_JSON
+            content = """{"x": {"clientId": ""}}"""
+        }.andExpect { status { isNoContent() } }
+
+        assertEquals(xIdConfigDefault, settings.x().clientId, "cleared field falls back to config")
+        assertEquals("runtime-x-secret", settings.x().clientSecret)
 
         // overridden flags track the override rows, not the resolved values
         mvc.get("/api/admin/settings").andExpect {
             jsonPath("$.x.clientIdOverridden") { value(false) }
+            jsonPath("$.x.clientSecretOverridden") { value(true) }
             jsonPath("$.facebook.clientIdOverridden") { value(true) }
+            jsonPath("$.facebook.clientSecretOverridden") { value(false) }
         }
-    }
-
-    @WithMockUser(roles = ["OWNER"])
-    @Test
-    fun `blank values are rejected`() {
-        mvc.put("/api/admin/settings") {
-            contentType = MediaType.APPLICATION_JSON
-            content = """{"x": {"clientId": "  "}}"""
-        }.andExpect { status { isBadRequest() } }
     }
 
     @WithMockUser(roles = ["OWNER"])

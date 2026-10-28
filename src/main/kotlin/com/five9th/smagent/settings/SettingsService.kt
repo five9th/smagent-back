@@ -4,21 +4,23 @@ import com.five9th.smagent.config.AppProperties
 import com.five9th.smagent.crypto.CryptoService
 import com.five9th.smagent.domain.AppSetting
 import com.five9th.smagent.repo.AppSettingRepository
-import jakarta.validation.Valid
-import jakarta.validation.constraints.NotBlank
 import org.springframework.stereotype.Service
 
-/** App credentials for one platform; blank values are rejected, null = clear the override. */
+/**
+ * App credentials for one platform. Per-field tri-state:
+ * non-empty -> set the override; `""` -> clear it (fall back to config);
+ * null/omitted -> untouched. `clientId` and `clientSecret` are independent.
+ */
 data class PlatformCredentials(
-    @field:NotBlank val clientId: String? = null,
-    @field:NotBlank val clientSecret: String? = null,
+    val clientId: String? = null,
+    val clientSecret: String? = null,
 )
 
-/** PUT semantics: replaces all overrides; omitted platforms/fields fall back to config. */
+/** Any subset of platforms/fields; omitted ones are left untouched. */
 data class UpdateSettingsRequest(
-    @field:Valid val facebook: PlatformCredentials? = null,
-    @field:Valid val linkedin: PlatformCredentials? = null,
-    @field:Valid val x: PlatformCredentials? = null,
+    val facebook: PlatformCredentials? = null,
+    val linkedin: PlatformCredentials? = null,
+    val x: PlatformCredentials? = null,
 )
 
 /** Well-known setting keys; [key] is the persisted identifier (app_settings.setting_key). */
@@ -34,8 +36,8 @@ enum class SettingKey(val key: String) {
 /**
  * Runtime app settings. Persistence model: a stored row OVERRIDES the yaml/env
  * default (AppProperties) for its key; no row = use the config value. Overrides
- * survive restarts; a PUT replaces the whole override set (fields/platforms left
- * out fall back to config again).
+ * survive restarts; each field is set/cleared independently (see
+ * [applyOverrides]).
  *
  * Consumers ask this service for the OAuth app credentials — never AppProperties.
  */
@@ -66,23 +68,26 @@ class SettingsService(
     fun isOverridden(key: SettingKey): Boolean = settings.existsById(key.key)
 
     /**
-     * PUT semantics: replaces the whole override set. Platform sections and
-     * individual fields left out clear those overrides back to config; blank
-     * values are rejected (400 by the caller's validation).
+     * Per-field tri-state update (null/omitted = untouched, "" = clear back to
+     * config, non-empty = set). Each of the six fields is independent.
      */
-    fun replaceOverrides(request: UpdateSettingsRequest) {
-        val wanted: Map<SettingKey, String> = buildMap {
-            request.facebook?.clientId?.let { put(SettingKey.FACEBOOK_CLIENT_ID, it) }
-            request.facebook?.clientSecret?.let { put(SettingKey.FACEBOOK_CLIENT_SECRET, it) }
-            request.linkedin?.clientId?.let { put(SettingKey.LINKEDIN_CLIENT_ID, it) }
-            request.linkedin?.clientSecret?.let { put(SettingKey.LINKEDIN_CLIENT_SECRET, it) }
-            request.x?.clientId?.let { put(SettingKey.X_CLIENT_ID, it) }
-            request.x?.clientSecret?.let { put(SettingKey.X_CLIENT_SECRET, it) }
+    fun applyOverrides(request: UpdateSettingsRequest) {
+        fun set(key: SettingKey, value: String?) {
+            if (value == null) return // untouched
+            val trimmed = value.trim()
+            if (trimmed.isEmpty()) {
+                settings.deleteById(key.key)
+            } else {
+                settings.save(AppSetting(key = key.key, valueEnc = crypto.encrypt(trimmed)))
+            }
         }
-        settings.deleteAll()
-        wanted.forEach { (key, value) ->
-            settings.save(AppSetting(key = key.key, valueEnc = crypto.encrypt(value)))
-        }
+
+        set(SettingKey.FACEBOOK_CLIENT_ID, request.facebook?.clientId)
+        set(SettingKey.FACEBOOK_CLIENT_SECRET, request.facebook?.clientSecret)
+        set(SettingKey.LINKEDIN_CLIENT_ID, request.linkedin?.clientId)
+        set(SettingKey.LINKEDIN_CLIENT_SECRET, request.linkedin?.clientSecret)
+        set(SettingKey.X_CLIENT_ID, request.x?.clientId)
+        set(SettingKey.X_CLIENT_SECRET, request.x?.clientSecret)
     }
 
     private fun resolve(key: SettingKey, configDefault: String): String {

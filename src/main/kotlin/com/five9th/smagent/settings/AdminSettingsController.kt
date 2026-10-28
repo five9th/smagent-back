@@ -1,6 +1,5 @@
 package com.five9th.smagent.settings
 
-import jakarta.validation.Valid
 import org.springframework.http.HttpStatus
 import org.springframework.web.bind.annotation.GetMapping
 import org.springframework.web.bind.annotation.PutMapping
@@ -10,7 +9,7 @@ import org.springframework.web.bind.annotation.ResponseStatus
 import org.springframework.web.bind.annotation.RestController
 
 /**
- * Owner-facing runtime settings. Values are write-only: PUT stores them
+ * Owner-facing runtime settings. Values are write-only: PUT updates them
  * (encrypted), GET reports only whether each is overridden at runtime —
  * never values.
  */
@@ -25,9 +24,13 @@ class AdminSettingsController(private val settings: SettingsService) {
         val x: PlatformConfigured,
     )
 
+    /**
+     * Per-field tri-state: non-empty = set override, "" = clear back to config,
+     * omitted/null = untouched. Each of the six fields is independent.
+     */
     @PutMapping
     @ResponseStatus(HttpStatus.NO_CONTENT)
-    fun update(@Valid @RequestBody request: UpdateSettingsRequest) = settings.replaceOverrides(request)
+    fun update(@RequestBody request: UpdateSettingsRequest) = settings.applyOverrides(request)
 
     @GetMapping
     fun status(): SettingsStatus = SettingsStatus(

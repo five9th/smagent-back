@@ -1,6 +1,6 @@
 # SMAgent API Reference
 
-Version: <!-- gradle:version -->0.11.2<!-- /gradle:version -->
+Version: <!-- gradle:version -->0.11.3<!-- /gradle:version -->
 
 REST API for the SMAgent backend. Base URL: `http://localhost:8080/api` (configurable
 via `server.port`). All endpoints require an authenticated session except login and
@@ -695,27 +695,26 @@ Runtime overrides for the OAuth app credentials (`clientId`/`clientSecret` of
 Facebook, LinkedIn, X). A stored override wins over the yaml/env value; values
 are encrypted at rest and never returned.
 
-| Method | Path                   | Description                                     |
-|--------|------------------------|-------------------------------------------------|
-| PUT    | `/api/admin/settings`  | Replace the override set                        |
-| GET    | `/api/admin/settings`  | Which settings are configured (booleans only)   |
+| Method | Path                   | Description                                          |
+|--------|------------------------|------------------------------------------------------|
+| PUT    | `/api/admin/settings`  | Set/clear overrides, per field                       |
+| GET    | `/api/admin/settings`  | Which settings are overridden at runtime (booleans)  |
 
-**PUT** (204) — any subset of platforms/fields; The values can be updated only as a 
-whole blob - PUT deletes all stored overrides, then saves only what's in the request body
-so omitted fields clear back to config values:
+**PUT** (204) — any subset of platforms/fields, each of the six independent:
 
 ```json
-{ "x": { "clientId": "...", "clientSecret": "..." } }
+{ "x": { "clientId": "new-id", "clientSecret": "" } }
 ```
 
-Blank values → `400`.
+Per field: non-empty value → set the override; `""` → clear it (fall back to
+config); omitted/`null` → untouched.
 
-**GET**:
+**GET** — runtime overrides, not resolved values:
 
 ```json
-{ "facebook": { "clientIdSet": true, "clientSecretSet": true },
-  "linkedin": { "clientIdSet": false, "clientSecretSet": false },
-  "x":        { "clientIdSet": true,  "clientSecretSet": false } }
+{ "facebook": { "clientIdOverridden": true,  "clientSecretOverridden": true },
+  "linkedin": { "clientIdOverridden": false, "clientSecretOverridden": false },
+  "x":        { "clientIdOverridden": true,  "clientSecretOverridden": false } }
 ```
 
 ## Operational endpoints

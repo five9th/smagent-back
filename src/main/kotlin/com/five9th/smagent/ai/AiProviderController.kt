@@ -1,0 +1,47 @@
+package com.five9th.smagent.ai
+
+import jakarta.validation.Valid
+import org.springframework.http.HttpStatus
+import org.springframework.web.bind.annotation.DeleteMapping
+import org.springframework.web.bind.annotation.GetMapping
+import org.springframework.web.bind.annotation.PathVariable
+import org.springframework.web.bind.annotation.PostMapping
+import org.springframework.web.bind.annotation.PutMapping
+import org.springframework.web.bind.annotation.RequestBody
+import org.springframework.web.bind.annotation.RequestMapping
+import org.springframework.web.bind.annotation.ResponseStatus
+import org.springframework.web.bind.annotation.RestController
+
+@RestController
+@RequestMapping("/api/ai-providers")
+class AiProviderController(private val service: AiProviderService) {
+
+    @GetMapping
+    fun list(): List<AiProviderDto> = service.list()
+
+    @PostMapping
+    @ResponseStatus(HttpStatus.CREATED)
+    fun create(@Valid @RequestBody request: CreateAiProviderRequest): AiProviderDto = service.create(request)
+
+    @GetMapping("/{id}")
+    fun get(@PathVariable id: Long): AiProviderDto = service.getDto(id)
+
+    @PutMapping("/{id}")
+    fun update(@PathVariable id: Long, @Valid @RequestBody request: UpdateAiProviderRequest): AiProviderDto =
+        service.update(id, request)
+
+    @DeleteMapping("/{id}")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    fun delete(@PathVariable id: Long) = service.delete(id)
+
+    @PostMapping("/{id}/verify")
+    fun verify(@PathVariable id: Long): VerifyAiProviderResponse = service.verify(id)
+
+    /** Well-known API roots for the SPA's baseUrl suggestion list. */
+    @GetMapping("/baseurls/{type}")
+    fun baseUrls(@PathVariable type: String): Map<String, String> = AiBaseUrls.forType(type)
+
+    /** Model ids the provider's key can use (live call). */
+    @GetMapping("/{id}/models")
+    fun models(@PathVariable id: Long): List<String> = service.listModels(id)
+}

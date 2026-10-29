@@ -39,5 +39,16 @@ out/
 ### Kotlin ###
 .kotlin
 
+### App data ###
+/data/
+
 ### AI ###
 /.mcp.json
+/.claude/
+
+### Other ###
+/TODO.txt
+mynotes/
+
+### Python ###
+__pycache__/

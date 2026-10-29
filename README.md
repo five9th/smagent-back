@@ -6,6 +6,9 @@ Single-owner backend for AI-assisted social media posting. Multi-account publish
 to platform APIs via per-platform adapters, encrypted credential storage, and a
 publication log that records every publish attempt.
 
+**For releases go to [smagent-deploy](https://github.com/five9th/smagent-deploy).**
+It contains a compose file that lets you run the app as a single docker container.
+
 Current scope (MVP):
 
 - **Platforms:** Facebook Pages, LinkedIn, X (text posts) and Reddit (adapter
